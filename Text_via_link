@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Teleprompter dinámico</title>
+
+<style>
+  body {
+    margin: 0;
+    background: #111;
+    color: #f1f1f1;
+    font-family: Arial, sans-serif;
+  }
+
+  #textArea {
+    height: calc(100vh - 140px);
+    overflow-y: auto;
+    padding: 40px;
+    box-sizing: border-box;
+    font-size: 24px;
+    line-height: 1.7;
+  }
+
+  #controls {
+    height: 140px;
+    background: #000;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+  }
+
+  input {
+    padding: 6px;
+    font-size: 14px;
+    width: 300px;
+  }
+
+  button {
+    font-size: 14px;
+    padding: 8px 12px;
+    cursor: pointer;
+  }
+</style>
+</head>
+
+<body>
+
+<div id="textArea">
+  <p>Pega una URL de texto y presiona “Cargar texto”.</p>
+</div>
+
+<div id="controls">
+  <input type="text" id="txtUrl" placeholder="https://.../script.txt">
+  <button onclick="loadText()">📥 Cargar texto</button>
+
+  <label>
+    Tiempo por página (s):
+    <input type="number" id="timing" value="10" min="2" style="width:70px">
+  </label>
+
+  <button onclick="play()">▶ Play</button>
+  <button onclick="pause()">⏸ Pause</button>
+  <button onclick="pageUp()">⬆ Página</button>
+  <button onclick="pageDown()">⬇ Página</button>
+</div>
+
+<script>
+  let timer = null;
+  const area = document.getElementById("textArea");
+
+  async function loadText() {
+    const url = document.getElementById("txtUrl").value.trim();
+    if (!url) return alert("Pega una URL válida");
+
+    try {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error("No se pudo cargar el archivo");
+
+      const text = await response.text();
+
+      // Limpia área
+      area.innerHTML = "";
+
+      // Divide por líneas y crea párrafos
+      text.split(/\n\s*\n/).forEach(block => {
+        const p = document.createElement("p");
+        p.textContent = block.trim();
+        area.appendChild(p);
+      });
+
+      area.scrollTop = 0;
+
+    } catch (err) {
+      alert("Error cargando el texto");
+      console.error(err);
+    }
+  }
+
+  function play() {
+    if (timer) return;
+    const seconds = parseFloat(document.getElementById("timing").value) || 10;
+    timer = setInterval(pageDown, seconds * 1000);
+  }
+
+  function pause() {
+    clearInterval(timer);
+    timer = null;
+  }
+
+  function pageDown() {
+    area.scrollTop += area.clientHeight * 0.9;
+  }
+
+  function pageUp() {
+    area.scrollTop -= area.clientHeight * 0.9;
+  }
+</script>
+
+</body>
+</html>
