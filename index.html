@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>Teleprompter</title>
+<title>Teleprompter by Chou</title>
 
 <style>
 body {
@@ -17,7 +17,13 @@ body {
   overflow: hidden;
 }
 
-/* Área de texto (ligeramente reducida) */
+#progress {
+  height: 4px;
+  background: #1e88e5;
+  width: 0%;
+  transition: width 0.1s linear;
+}
+
 #text {
   flex: 1;
   padding: 0.8rem 1rem;
@@ -27,12 +33,14 @@ body {
   overflow: hidden;
 }
 
-/* Resaltado */
-.highlight {
-  background: rgba(30,136,229,0.25);
+.line {
+  padding: 0.1rem 0;
 }
 
-/* Controles */
+.highlight {
+  background: rgba(30,136,229,0.3);
+}
+
 .controls {
   display: flex;
   flex-wrap: wrap;
@@ -44,21 +52,15 @@ body {
 .controls input,
 .controls button {
   flex: 1 1 30%;
-  max-width: 100%;
-  box-sizing: border-box;
   padding: 0.6rem;
   font-size: 1rem;
   border-radius: 6px;
   border: none;
 }
 
-.controls input[type="file"] {
-  color: #aaa;
-}
-
 button:enabled {
   background: #1e88e5;
-  color: white;
+  color: #fff;
 }
 
 button:disabled {
@@ -66,7 +68,6 @@ button:disabled {
   color: #777;
 }
 
-/* Modo ocultar UI */
 .hide-ui .controls {
   display: none;
 }
@@ -75,11 +76,12 @@ button:disabled {
 
 <body>
 
-<div id="text">Carga un texto para comenzar…</div>
+<div id="progress"></div>
+<div id="text">Carga un texto ya sea mediante una url o el archivo para comenzar…</div>
 
 <div class="controls">
   <input id="textUrl" placeholder="URL del texto (.txt)">
-  <input id="timingInput" type="number" min="1" value="7" placeholder="Segundos">
+  <input id="timingInput" type="number" min="1" value="7">
   <input id="fileInput" type="file" accept=".txt">
   <button id="load">Cargar</button>
 
@@ -96,29 +98,23 @@ button:disabled {
 <script>
 let pages = [];
 let currentPage = 0;
+let currentLine = 0;
 let timer = null;
+let lineTimer = null;
 let timing = 7;
-let mirrored = false;
 let broadcasting = false;
 
 const textDiv = document.getElementById("text");
+const progress = document.getElementById("progress");
 const pauseBtn = document.getElementById("pause");
-let touchStartX = 0;
 
-/* ---------- FULLSCREEN ---------- */
 function enterFullscreen() {
-  if (!document.fullscreenElement) {
-    document.documentElement.requestFullscreen?.();
-  }
+  document.documentElement.requestFullscreen?.();
 }
-
 function exitFullscreen() {
-  if (document.fullscreenElement) {
-    document.exitFullscreen?.();
-  }
+  document.exitFullscreen?.();
 }
 
-/* ---------- PAGINACIÓN ---------- */
 function splitPages(text) {
   const lines = text.split(/\r?\n+/);
   const perPage = 15;
@@ -129,32 +125,54 @@ function splitPages(text) {
   return result;
 }
 
-function showPage() {
-  if (!pages.length) return;
+function renderPage() {
+  currentLine = 0;
   textDiv.innerHTML = pages[currentPage]
     .map((l, i) =>
-      i === 0 ? `<div class="highlight">${l}</div>` : `<div>${l}</div>`
+      `<div class="line ${i === 0 ? "highlight" : ""}">${l}</div>`
     ).join("");
+  progress.style.width = "0%";
 }
 
-/* ---------- PLAY / PAUSE ---------- */
+function advanceLine() {
+  const lines = document.querySelectorAll(".line");
+  if (currentLine < lines.length - 1) {
+    lines[currentLine].classList.remove("highlight");
+    currentLine++;
+    lines[currentLine].classList.add("highlight");
+  }
+}
+
 function start() {
   if (timer || !pages.length) return;
   pauseBtn.disabled = false;
   enterFullscreen();
 
+  const linesCount = pages[currentPage].length;
+  const lineDuration = (timing * 1000) / linesCount;
+  let elapsed = 0;
+
+  lineTimer = setInterval(() => {
+    advanceLine();
+  }, lineDuration);
+
   timer = setInterval(() => {
-    if (currentPage < pages.length - 1) {
-      currentPage++;
-      showPage();
-    } else {
-      stop();
-    }
+    currentPage < pages.length - 1 ? currentPage++ : stop();
+    renderPage();
+    clearInterval(lineTimer);
+    start();
   }, timing * 1000);
+
+  const progressInterval = setInterval(() => {
+    elapsed += 100;
+    progress.style.width = `${(elapsed / (timing * 1000)) * 100}%`;
+    if (!timer) clearInterval(progressInterval);
+  }, 100);
 }
 
 function stop() {
   clearInterval(timer);
+  clearInterval(lineTimer);
   timer = null;
   pauseBtn.disabled = true;
   if (!broadcasting) exitFullscreen();
@@ -163,69 +181,46 @@ function stop() {
 play.onclick = start;
 pause.onclick = stop;
 
-/* ---------- NAVEGACIÓN ---------- */
 next.onclick = () => {
   if (currentPage < pages.length - 1) {
     currentPage++;
-    showPage();
+    renderPage();
   }
 };
 
 prev.onclick = () => {
   if (currentPage > 0) {
     currentPage--;
-    showPage();
+    renderPage();
   }
 };
 
-/* ---------- CARGAR TEXTO ---------- */
 load.onclick = async () => {
   stop();
-  currentPage = 0;
   timing = parseInt(timingInput.value) || 7;
+  let txt = "";
 
-  try {
-    let txt = "";
-    if (fileInput.files[0]) {
-      txt = await fileInput.files[0].text();
-    } else if (textUrl.value) {
-      const res = await fetch(textUrl.value);
-      txt = await res.text();
-    } else {
-      textDiv.textContent = "Carga un TXT o una URL.";
-      return;
-    }
-    pages = splitPages(txt.replace(/\r/g, ""));
-    showPage();
-  } catch {
-    textDiv.textContent = "Error cargando el texto.";
-  }
+  if (fileInput.files[0]) {
+    txt = await fileInput.files[0].text();
+  } else if (textUrl.value) {
+    const res = await fetch(textUrl.value);
+    txt = await res.text();
+  } else return;
+
+  pages = splitPages(txt.replace(/\r/g, ""));
+  currentPage = 0;
+  renderPage();
 };
 
-/* ---------- SWIPE ---------- */
-textDiv.addEventListener("touchstart", e => {
-  touchStartX = e.changedTouches[0].screenX;
-});
-
-textDiv.addEventListener("touchend", e => {
-  const diff = e.changedTouches[0].screenX - touchStartX;
-  if (Math.abs(diff) > 50) {
-    diff < 0 ? next.onclick() : prev.onclick();
-  }
-});
-
-/* ---------- MIRROR ---------- */
 mirror.onclick = () => {
-  mirrored = !mirrored;
-  textDiv.style.transform = mirrored ? "scaleX(-1)" : "none";
+  textDiv.style.transform =
+    textDiv.style.transform ? "" : "scaleX(-1)";
 };
 
-/* ---------- TOGGLE UI ---------- */
 toggleUI.onclick = () => {
   document.body.classList.toggle("hide-ui");
 };
 
-/* ---------- BROADCAST ---------- */
 broadcast.onclick = () => {
   broadcasting = !broadcasting;
   document.body.classList.toggle("hide-ui", broadcasting);
