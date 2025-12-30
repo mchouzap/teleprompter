@@ -79,4 +79,158 @@ button:disabled {
 <body>
 
 <div class="inputs">
-  <input id="textUrl" placeholder="URL del t
+  <input id="textUrl" placeholder="URL del texto (.txt)">
+  <input id="timingInput" type="number" placeholder="Segundos por página" min="1">
+  <input id="fileInput" type="file" accept=".txt">
+  <button id="load">Cargar texto</button>
+</div>
+
+<div id="text">Carga un texto para comenzar…</div>
+
+<div class="controls">
+
+  <button id="play">▶</button>
+  <button id="pause" disabled>⏸</button>
+    <button id="prev">⏮</button>
+  <button id="next">⏭</button>
+</div>
+
+<script>
+let pages = [];
+let currentPage = 0;
+let timer = null;
+let timing = 5;
+
+const textDiv = document.getElementById("text");
+const pauseBtn = document.getElementById("pause");
+let touchStartX = 0;
+
+// -------------------- URL PARAMS --------------------
+function getParams() {
+  const p = new URLSearchParams(window.location.search);
+  return {
+    textUrl: p.get("text"),
+    timing: parseInt(p.get("timing"))
+  };
+}
+
+// -------------------- PAGINATION --------------------
+function splitPages(text) {
+  const lines = text.split(/\r?\n+/);
+  const linesPerPage = 15;
+  const result = [];
+  for (let i = 0; i < lines.length; i += linesPerPage) {
+    result.push(lines.slice(i, i + linesPerPage).join("\n"));
+  }
+  return result;
+}
+
+function showPage() {
+  textDiv.textContent = pages[currentPage] || "";
+}
+
+// -------------------- CONTROLS --------------------
+function start() {
+  if (timer || pages.length === 0) return;
+  pauseBtn.disabled = false;
+
+  timer = setInterval(() => {
+    if (currentPage < pages.length - 1) {
+      currentPage++;
+      showPage();
+    } else {
+      stop();
+    }
+  }, timing * 1000);
+}
+
+function stop() {
+  clearInterval(timer);
+  timer = null;
+  pauseBtn.disabled = true;
+}
+
+document.getElementById("play").onclick = start;
+document.getElementById("pause").onclick = stop;
+
+document.getElementById("next").onclick = () => {
+  if (currentPage < pages.length - 1) {
+    currentPage++;
+    showPage();
+  }
+};
+
+document.getElementById("prev").onclick = () => {
+  if (currentPage > 0) {
+    currentPage--;
+    showPage();
+  }
+};
+
+// -------------------- LOADERS --------------------
+document.getElementById("load").onclick = loadText;
+
+async function loadText() {
+  stop();
+  currentPage = 0;
+
+  const url = document.getElementById("textUrl").value;
+  const t = parseInt(document.getElementById("timingInput").value);
+  const file = document.getElementById("fileInput").files[0];
+
+  if (t > 0) timing = t;
+
+  try {
+    let text = "";
+
+    if (file) {
+      text = await file.text();
+    } else if (url) {
+      const res = await fetch(url);
+      text = await res.text();
+    } else {
+      textDiv.textContent = "Carga un archivo TXT o una URL.";
+      return;
+    }
+
+    pages = splitPages(text.replace(/\r/g, ""));
+    showPage();
+  } catch {
+    textDiv.textContent = "Error cargando el texto.";
+  }
+}
+
+// -------------------- SWIPE --------------------
+textDiv.addEventListener("touchstart", e => {
+  touchStartX = e.changedTouches[0].screenX;
+});
+
+textDiv.addEventListener("touchend", e => {
+  const diff = e.changedTouches[0].screenX - touchStartX;
+  if (Math.abs(diff) > 50) {
+    if (diff < 0 && currentPage < pages.length - 1) {
+      currentPage++;
+    }
+    if (diff > 0 && currentPage > 0) {
+      currentPage--;
+    }
+    showPage();
+  }
+});
+
+// -------------------- INIT FROM URL --------------------
+(function initFromURL() {
+  const p = getParams();
+  if (p.textUrl) {
+    document.getElementById("textUrl").value = p.textUrl;
+    if (p.timing) {
+      timing = p.timing;
+      document.getElementById("timingInput").value = timing;
+    }
+    loadText();
+  }
+})();
+</script>
+
+</body>
+</html>
