@@ -1,66 +1,79 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Teleprompter</title>
 
 <style>
-  body {
-    margin: 0;
-    background: #000;
-    color: #fff;
-    font-family: system-ui, sans-serif;
-    display: flex;
-    flex-direction: column;
-    height: 100vh;
-  }
+body {
+  margin: 0;
+  background: #000;
+  color: #fff;
+  font-family: system-ui, sans-serif;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
 
-  #text {
-    flex: 1;
-    padding: 1rem;
-    font-size: 1.4rem;
-    line-height: 1.6;
-    overflow-y: auto;
-    white-space: pre-wrap;
-  }
+#text {
+  flex: 1;
+  padding: 1rem;
+  font-size: 1.4rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
 
-  .controls {
-    display: flex;
-    gap: 0.5rem;
-    padding: 0.5rem;
-    background: #111;
-  }
+.inputs, .controls {
+  display: flex;
+  gap: 0.4rem;
+  padding: 0.5rem;
+  background: #111;
+}
 
-  button {
-    flex: 1;
-    font-size: 1rem;
-    padding: 0.7rem;
-    border: none;
-    border-radius: 6px;
-  }
+input {
+  flex: 1;
+  padding: 0.5rem;
+  font-size: 1rem;
+  border-radius: 6px;
+  border: none;
+}
 
-  button:enabled {
-    background: #1e88e5;
-    color: white;
-  }
+button {
+  flex: 1;
+  padding: 0.7rem;
+  font-size: 1.1rem;
+  border: none;
+  border-radius: 6px;
+}
 
-  button:disabled {
-    background: #333;
-    color: #777;
-  }
+button:enabled {
+  background: #1e88e5;
+  color: white;
+}
+
+button:disabled {
+  background: #333;
+  color: #777;
+}
 </style>
 </head>
 
 <body>
 
-<div id="text">Cargando texto…</div>
+<div class="inputs">
+  <input id="textUrl" placeholder="URL del texto (.txt)">
+  <input id="timingInput" type="number" placeholder="Segundos" min="1">
+  <button id="load">Cargar</button>
+</div>
+
+<div id="text">Carga un texto para comenzar…</div>
 
 <div class="controls">
-  <button id="prev">◀</button>
+  <button id="prev">⏮</button>
   <button id="play">▶</button>
   <button id="pause" disabled>⏸</button>
-  <button id="next">▶</button>
+  <button id="next">⏭</button>
 </div>
 
 <script>
@@ -70,23 +83,22 @@ let timer = null;
 let timing = 5;
 
 const textDiv = document.getElementById("text");
-const playBtn = document.getElementById("play");
 const pauseBtn = document.getElementById("pause");
 
 function getParams() {
   const p = new URLSearchParams(window.location.search);
   return {
     textUrl: p.get("text"),
-    timing: parseInt(p.get("timing")) || 5
+    timing: parseInt(p.get("timing"))
   };
 }
 
-function splitIntoPages(text) {
+function splitPages(text) {
   const lines = text.split(/\r?\n+/);
-  const pageSize = 6;
+  const size = 6;
   const result = [];
-  for (let i = 0; i < lines.length; i += pageSize) {
-    result.push(lines.slice(i, i + pageSize).join("\n"));
+  for (let i = 0; i < lines.length; i += size) {
+    result.push(lines.slice(i, i + size).join("\n"));
   }
   return result;
 }
@@ -96,7 +108,7 @@ function showPage() {
 }
 
 function start() {
-  if (timer) return;
+  if (timer || pages.length === 0) return;
   pauseBtn.disabled = false;
 
   timer = setInterval(() => {
@@ -115,6 +127,9 @@ function stop() {
   pauseBtn.disabled = true;
 }
 
+document.getElementById("play").onclick = start;
+document.getElementById("pause").onclick = stop;
+
 document.getElementById("next").onclick = () => {
   if (currentPage < pages.length - 1) {
     currentPage++;
@@ -129,29 +144,44 @@ document.getElementById("prev").onclick = () => {
   }
 };
 
-playBtn.onclick = start;
-pauseBtn.onclick = stop;
+document.getElementById("load").onclick = loadText;
 
 async function loadText() {
-  const params = getParams();
-  timing = params.timing;
+  stop();
+  currentPage = 0;
 
-  if (!params.textUrl) {
-    textDiv.textContent = "No se proporcionó URL de texto.";
+  const url = document.getElementById("textUrl").value;
+  const t = parseInt(document.getElementById("timingInput").value);
+
+  if (t > 0) timing = t;
+
+  if (!url) {
+    textDiv.textContent = "Introduce una URL válida.";
     return;
   }
 
   try {
-    const res = await fetch(params.textUrl);
+    const res = await fetch(url);
     const txt = await res.text();
-    pages = splitIntoPages(txt.replace(/\r/g, ""));
+    pages = splitPages(txt.replace(/\r/g, ""));
     showPage();
   } catch {
     textDiv.textContent = "Error cargando el texto.";
   }
 }
 
-loadText();
+// Inicialización desde URL (sin autoplay)
+(function initFromURL() {
+  const p = getParams();
+  if (p.textUrl) {
+    document.getElementById("textUrl").value = p.textUrl;
+    if (p.timing) {
+      timing = p.timing;
+      document.getElementById("timingInput").value = timing;
+    }
+    loadText();
+  }
+})();
 </script>
 
 </body>
