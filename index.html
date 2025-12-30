@@ -6,6 +6,11 @@
 <title>Teleprompter</title>
 
 <style>
+:root {
+  --btn-h: 42px;
+  --font-size: min(4.2vw, 1.35rem);
+}
+
 body {
   margin: 0;
   background: #000;
@@ -18,35 +23,17 @@ body {
 }
 
 #progress {
-  height: 4px;
+  height: 3px;
   background: #1e88e5;
   width: 0%;
 }
 
-#text {
-  flex: 1;
-  padding: 0.8rem 1rem;
-  font-size: 1.3rem;
-  line-height: 1.6;
-  white-space: pre-wrap;
-  overflow: hidden;
-}
-
-.line {
-  padding: 0.1rem 0;
-}
-
-.highlight {
-  background: rgba(30,136,229,0.3);
-}
-
-/* Ritmo */
 #tempo {
   position: absolute;
   top: 6px;
   right: 10px;
-  width: 10px;
-  height: 10px;
+  width: 9px;
+  height: 9px;
   border-radius: 50%;
   background: #555;
 }
@@ -55,32 +42,57 @@ body {
   background: #1e88e5;
 }
 
-/* Controles */
+#text {
+  flex: 1;
+  padding: 1vh 4vw;
+  font-size: var(--font-size);
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow: hidden;
+}
+
+.line {
+  padding: 0.1em 0;
+}
+
+.highlight {
+  background: rgba(30,136,229,0.3);
+}
+
+/* CONTROLES */
 .controls {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-  padding: 0.5rem;
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+  padding: 6px;
   background: #111;
 }
 
 .controls input,
 .controls button {
-  flex: 1 1 30%;
-  padding: 0.6rem;
+  height: var(--btn-h);
   font-size: 1rem;
   border-radius: 6px;
   border: none;
 }
 
-button:enabled {
+.controls input {
+  grid-column: span 2;
+  padding: 0 8px;
+}
+
+.controls button {
   background: #1e88e5;
-  color: white;
+  color: #fff;
 }
 
 button:disabled {
   background: #333;
   color: #777;
+}
+
+.icon {
+  font-size: 1.2rem;
 }
 </style>
 </head>
@@ -89,20 +101,21 @@ button:disabled {
 
 <div id="tempo"></div>
 <div id="progress"></div>
+
 <div id="text">Carga un texto para comenzar…</div>
 
 <div class="controls">
-  <input id="textUrl" placeholder="URL del texto (.txt)">
+  <input id="textUrl" placeholder="URL .txt">
   <input id="timingInput" type="number" min="1" value="7">
-  <input id="fileInput" type="file" accept=".txt">
-  <button id="load">Cargar</button>
 
-  <button id="prev">⏮⏮</button>
-  <button id="play">▶</button>
-  <button id="pause" disabled>⏸</button>
-  <button id="next">⏭⏭</button>
+  <button id="load" class="icon">📂</button>
+  <input id="fileInput" type="file" accept=".txt" hidden>
 
-  <button id="fullscreen">⤢</button>
+  <button id="play" class="icon">▶</button>
+  <button id="pause" class="icon" disabled>⏸</button>
+  <button id="prev" class="icon">⏮⏮</button>
+  <button id="next" class="icon">⏭⏭</button>
+  <button id="fullscreen" class="icon">⤢</button>
 </div>
 
 <script>
@@ -112,139 +125,3 @@ let currentLine = 0;
 let timer = null;
 let lineTimer = null;
 let tempoTimer = null;
-let timing = 7;
-
-const textDiv = document.getElementById("text");
-const progress = document.getElementById("progress");
-const pauseBtn = document.getElementById("pause");
-const tempo = document.getElementById("tempo");
-
-/* ---------- FULLSCREEN ---------- */
-function enterFullscreen() {
-  document.documentElement.requestFullscreen?.();
-}
-function exitFullscreen() {
-  document.exitFullscreen?.();
-}
-
-/* ---------- PAGINACIÓN ---------- */
-function splitPages(text) {
-  const lines = text.split(/\r?\n+/);
-  const perPage = 15;
-  const result = [];
-  for (let i = 0; i < lines.length; i += perPage) {
-    result.push(lines.slice(i, i + perPage));
-  }
-  return result;
-}
-
-function renderPage() {
-  currentLine = 0;
-  textDiv.innerHTML = pages[currentPage]
-    .map((l, i) =>
-      `<div class="line ${i === 0 ? "highlight" : ""}">${l}</div>`
-    ).join("");
-  progress.style.width = "0%";
-}
-
-/* ---------- RITMO ---------- */
-function startTempo() {
-  const interval = 1000 / timing;
-  tempoTimer = setInterval(() => {
-    tempo.classList.add("pulse");
-    setTimeout(() => tempo.classList.remove("pulse"), 150);
-  }, interval);
-}
-
-function stopTempo() {
-  clearInterval(tempoTimer);
-}
-
-/* ---------- PLAY / PAUSE ---------- */
-function start() {
-  if (timer || !pages.length) return;
-  pauseBtn.disabled = false;
-  enterFullscreen();
-  startTempo();
-
-  const linesCount = pages[currentPage].length;
-  const lineDuration = (timing * 1000) / linesCount;
-  let elapsed = 0;
-
-  lineTimer = setInterval(() => {
-    const lines = document.querySelectorAll(".line");
-    if (currentLine < lines.length - 1) {
-      lines[currentLine].classList.remove("highlight");
-      currentLine++;
-      lines[currentLine].classList.add("highlight");
-    }
-  }, lineDuration);
-
-  timer = setInterval(() => {
-    if (currentPage < pages.length - 1) {
-      currentPage++;
-      renderPage();
-    } else {
-      stop();
-    }
-  }, timing * 1000);
-
-  const progressInterval = setInterval(() => {
-    elapsed += 100;
-    progress.style.width = `${(elapsed / (timing * 1000)) * 100}%`;
-    if (!timer) clearInterval(progressInterval);
-  }, 100);
-}
-
-function stop() {
-  clearInterval(timer);
-  clearInterval(lineTimer);
-  stopTempo();
-  timer = null;
-  pauseBtn.disabled = true;
-  exitFullscreen();
-}
-
-play.onclick = start;
-pause.onclick = stop;
-
-/* ---------- NAV ---------- */
-next.onclick = () => {
-  if (currentPage < pages.length - 1) {
-    currentPage++;
-    renderPage();
-  }
-};
-prev.onclick = () => {
-  if (currentPage > 0) {
-    currentPage--;
-    renderPage();
-  }
-};
-
-/* ---------- FULLSCREEN TOGGLE ---------- */
-fullscreen.onclick = () => {
-  document.fullscreenElement ? exitFullscreen() : enterFullscreen();
-};
-
-/* ---------- LOAD ---------- */
-load.onclick = async () => {
-  stop();
-  timing = parseInt(timingInput.value) || 7;
-  let txt = "";
-
-  if (fileInput.files[0]) {
-    txt = await fileInput.files[0].text();
-  } else if (textUrl.value) {
-    const res = await fetch(textUrl.value);
-    txt = await res.text();
-  } else return;
-
-  pages = splitPages(txt.replace(/\r/g, ""));
-  currentPage = 0;
-  renderPage();
-};
-</script>
-
-</body>
-</html>
