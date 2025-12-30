@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>Chou's Teleprompter</title>
+<title>Teleprompter</title>
 
 <style>
 :root {
@@ -11,9 +11,7 @@
   --font-size: min(4vw, 1.25rem);
 }
 
-* {
-  box-sizing: border-box;
-}
+* { box-sizing: border-box; }
 
 body {
   margin: 0;
@@ -30,92 +28,26 @@ body {
   height: 100%;
 }
 
-/* ───────── TOP CONTROLS ───────── */
-#topControls {
-  display: grid;
-  grid-template-columns: 1fr auto auto auto auto;
-  gap: 6px;
-  padding: 6px;
+/* HEADER */
+#header {
+  padding: 6px 10px;
+  font-size: 0.85rem;
   background: #111;
-}
-
-#topControls input,
-#topControls button {
-  height: var(--btn-h);
-  font-size: 0.9rem;
-  border-radius: 6px;
-  border: none;
-}
-
-#topControls input {
-  padding: 0 8px;
-  max-width: 100%;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-#topControls button {
-  background: #1e88e5;
-  color: #fff;
-}
-
-/* ───────── TEXT AREA ───────── */
-#textWrapper {
-  flex: 1;
-  position: relative;
-  overflow: hidden;
-}
-
-#progress {
-  height: 3px;
-  background: #1e88e5;
-  width: 0%;
-}
-
-#tempo {
-  position: absolute;
-  top: 6px;
-  right: 10px;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #555;
-  z-index: 10;
-}
-
-.pulse {
-  background: #1e88e5;
-}
-
-#text {
-  padding: 1vh 4vw;
-  font-size: var(--font-size);
-  line-height: 1.55;
-  white-space: pre-wrap;
-  overflow: hidden;
-}
-
-.line {
-  padding: 0.08em 0;
-}
-
-.highlight {
-  background: rgba(30,136,229,0.28);
-}
-
-/* ───────── BOTTOM CONTROLS ───────── */
-#bottomControls {
-  position: sticky;
-  bottom: 0;
+/* CONTROLS */
+#controls {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(10, 1fr);
   gap: 6px;
   padding: 6px;
   background: #111;
 }
 
-#bottomControls button {
+#controls button {
   height: var(--btn-h);
   border-radius: 6px;
   border: none;
@@ -128,40 +60,83 @@ button:disabled {
   background: #333;
   color: #777;
 }
+
+/* INPUT OVERLAY */
+#overlay {
+  display: none;
+  gap: 6px;
+  padding: 6px;
+  background: #111;
+}
+
+#overlay input {
+  flex: 1;
+  height: var(--btn-h);
+  border-radius: 6px;
+  border: none;
+  padding: 0 8px;
+}
+
+/* TEXT */
+#textWrapper {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+#tempo {
+  position: absolute;
+  top: 6px;
+  right: 10px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #555;
+}
+
+.pulse { background: #1e88e5; }
+
+#text {
+  padding: 1vh 4vw;
+  font-size: var(--font-size);
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.line { padding: 0.08em 0; }
+.highlight { background: rgba(30,136,229,0.28); }
 </style>
 </head>
 
 <body>
-
 <div id="app">
 
-  <!-- TOP -->
-  <div id="topControls">
-    <input id="textUrl" placeholder="URL .txt">
-    <button id="load">📂</button>
+<div id="header">Sin texto cargado</div>
 
-    <input id="timingInput" type="number" min="1" value="7" style="width:60px">
-    <button id="minus">➖</button>
-    <button id="plus">➕</button>
+<div id="controls">
+  <button id="folder">📁</button>
+  <button id="linkBtn">🔗</button>
+  <button id="timingBtn">⏱</button>
+  <button id="plus">➕</button>
+  <button id="minus">➖</button>
+  <button id="play">▶</button>
+  <button id="pause" disabled>⏸</button>
+  <button id="prev">⏮</button>
+  <button id="next">⏭</button>
+  <button id="fullscreen">⤢</button>
+</div>
 
-    <input id="fileInput" type="file" accept=".txt" hidden>
-  </div>
+<div id="overlay">
+  <input id="overlayInput">
+  <button id="overlayOk">OK</button>
+</div>
 
-  <!-- TEXT -->
-  <div id="textWrapper">
-    <div id="progress"></div>
-    <div id="tempo"></div>
-    <div id="text">Carga un URL valido a un texto o sube un archivo para comenzar…</div>
-  </div>
+<div id="textWrapper">
+  <div id="tempo"></div>
+  <div id="text">Carga un texto para comenzar…</div>
+</div>
 
-  <!-- BOTTOM -->
-  <div id="bottomControls">
-    <button id="play">▶</button>
-    <button id="pause" disabled>⏸</button>
-    <button id="prev">⏮</button>
-    <button id="next">⏭</button>
-    <button id="fullscreen">⤢</button>
-  </div>
+<input id="fileInput" type="file" accept=".txt" hidden>
 
 </div>
 
@@ -172,42 +147,44 @@ let currentLine = 0;
 let timer = null;
 let lineTimer = null;
 let tempoTimer = null;
+let timing = 7;
+let sourceName = "";
 
 const textDiv = document.getElementById("text");
-const pauseBtn = document.getElementById("pause");
+const header = document.getElementById("header");
+const overlay = document.getElementById("overlay");
+const overlayInput = document.getElementById("overlayInput");
 const tempo = document.getElementById("tempo");
-const timingInput = document.getElementById("timingInput");
-const textUrl = document.getElementById("textUrl");
 
 /* FULLSCREEN */
-function enterFullscreen() {
-  document.documentElement.requestFullscreen?.();
-}
-function exitFullscreen() {
-  document.exitFullscreen?.();
-}
+fullscreen.onclick = () =>
+  document.fullscreenElement
+    ? document.exitFullscreen()
+    : document.documentElement.requestFullscreen?.();
 
 /* PAGINATION */
 function splitPages(text) {
   const lines = text.split(/\r?\n+/);
-  const perPage = 12;
   const out = [];
-  for (let i = 0; i < lines.length; i += perPage) {
-    out.push(lines.slice(i, i + perPage));
-  }
+  for (let i = 0; i < lines.length; i += 12)
+    out.push(lines.slice(i, i + 12));
   return out;
 }
 
 function renderPage() {
   currentLine = 0;
   textDiv.innerHTML = pages[currentPage]
-    .map((l, i) =>
-      `<div class="line ${i === 0 ? "highlight" : ""}">${l}</div>`
-    ).join("");
+    .map((l, i) => `<div class="line ${i === 0 ? "highlight" : ""}">${l}</div>`)
+    .join("");
+}
+
+/* HEADER */
+function updateHeader() {
+  header.textContent = `${sourceName || "Texto"} | ⏱ ${timing}s`;
 }
 
 /* TEMPO */
-function startTempo(timing) {
+function startTempo() {
   const interval = 1000 / timing;
   tempoTimer = setInterval(() => {
     tempo.classList.add("pulse");
@@ -220,16 +197,12 @@ function stopTempo() {
 }
 
 /* PLAY */
-function start() {
+play.onclick = () => {
   if (timer || !pages.length) return;
+  pause.disabled = false;
+  startTempo();
 
-  const timing = parseInt(timingInput.value) || 7;
-  pauseBtn.disabled = false;
-  enterFullscreen();
-  startTempo(timing);
-
-  const linesCount = pages[currentPage].length;
-  const lineDuration = (timing * 1000) / linesCount;
+  const lineDuration = (timing * 1000) / pages[currentPage].length;
 
   lineTimer = setInterval(() => {
     const lines = document.querySelectorAll(".line");
@@ -241,57 +214,66 @@ function start() {
   }, lineDuration);
 
   timer = setInterval(() => {
-    if (currentPage < pages.length - 1) {
-      currentPage++;
-      renderPage();
-    } else {
-      stop();
-    }
+    if (++currentPage < pages.length) renderPage();
+    else pause.click();
   }, timing * 1000);
-}
+};
 
-function stop() {
+pause.onclick = () => {
   clearInterval(timer);
   clearInterval(lineTimer);
   stopTempo();
   timer = null;
-  pauseBtn.disabled = true;
-  exitFullscreen();
-}
+  pause.disabled = true;
+};
 
-/* CONTROLS */
-play.onclick = start;
-pause.onclick = stop;
+/* NAV */
 prev.onclick = () => currentPage > 0 && (currentPage--, renderPage());
 next.onclick = () => currentPage < pages.length - 1 && (currentPage++, renderPage());
-fullscreen.onclick = () => document.fullscreenElement ? exitFullscreen() : enterFullscreen();
 
-/* TIMING */
-minus.onclick = () => {
-  let v = parseInt(timingInput.value) || 7;
-  if (v > 1) timingInput.value = v - 1;
-  if (timer) { stop(); start(); }
-};
-plus.onclick = () => {
-  let v = parseInt(timingInput.value) || 7;
-  timingInput.value = v + 1;
-  if (timer) { stop(); start(); }
-};
+/* TIMING + - */
+plus.onclick = () => { timing++; updateHeader(); if (timer) pause.click(); };
+minus.onclick = () => { if (timing > 1) timing--; updateHeader(); if (timer) pause.click(); };
 
-/* LOAD */
-load.onclick = () => fileInput.click();
-
+/* FOLDER */
+folder.onclick = () => fileInput.click();
 fileInput.onchange = async () => {
-  stop();
   const file = fileInput.files[0];
   const txt = await file.text();
-
-  textUrl.value = file.name;
-  textUrl.readOnly = true;
-
-  pages = splitPages(txt.replace(/\r/g, ""));
+  sourceName = file.name;
+  pages = splitPages(txt);
   currentPage = 0;
+  updateHeader();
   renderPage();
+};
+
+/* LINK */
+linkBtn.onclick = () => {
+  overlay.style.display = "flex";
+  overlayInput.placeholder = "Pega URL .txt";
+};
+
+overlayOk.onclick = async () => {
+  if (overlayInput.placeholder.includes("URL")) {
+    const res = await fetch(overlayInput.value);
+    const txt = await res.text();
+    sourceName = overlayInput.value.replace(/^https?:\/\//, "");
+    pages = splitPages(txt);
+    currentPage = 0;
+  } else {
+    timing = Math.max(1, parseInt(overlayInput.value));
+  }
+  overlayInput.value = "";
+  overlay.style.display = "none";
+  updateHeader();
+  renderPage();
+};
+
+/* TIMING SET */
+timingBtn.onclick = () => {
+  overlay.style.display = "flex";
+  overlayInput.placeholder = "Segundos por página";
+  overlayInput.value = timing;
 };
 </script>
 
