@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>Teleprompter</title>
+<title>Chou's Teleprompter</title>
 
 <style>
 :root {
@@ -39,15 +39,22 @@ body {
 }
 
 /* CONTROLS */
-#controls {
+.controls {
   display: grid;
-  grid-template-columns: repeat(10, 1fr);
   gap: 6px;
   padding: 6px;
   background: #111;
 }
 
-#controls button {
+.controls.top {
+  grid-template-columns: repeat(6, 1fr);
+}
+
+.controls.bottom {
+  grid-template-columns: repeat(5, 1fr);
+}
+
+.controls button {
   height: var(--btn-h);
   border-radius: 6px;
   border: none;
@@ -61,7 +68,7 @@ button:disabled {
   color: #777;
 }
 
-/* INPUT OVERLAY */
+/* OVERLAY */
 #overlay {
   display: none;
   gap: 6px;
@@ -113,12 +120,18 @@ button:disabled {
 
 <div id="header">Sin texto cargado</div>
 
-<div id="controls">
+<!-- TOP CONTROLS -->
+<div class="controls top">
   <button id="folder">📁</button>
   <button id="linkBtn">🔗</button>
   <button id="timingBtn">⏱</button>
+  <button id="fontBtn">🔤</button>
   <button id="plus">➕</button>
   <button id="minus">➖</button>
+</div>
+
+<!-- BOTTOM CONTROLS -->
+<div class="controls bottom">
   <button id="play">▶</button>
   <button id="pause" disabled>⏸</button>
   <button id="prev">⏮</button>
@@ -126,6 +139,7 @@ button:disabled {
   <button id="fullscreen">⤢</button>
 </div>
 
+<!-- OVERLAY -->
 <div id="overlay">
   <input id="overlayInput">
   <button id="overlayOk">OK</button>
@@ -149,12 +163,28 @@ let lineTimer = null;
 let tempoTimer = null;
 let timing = 7;
 let sourceName = "";
+let fontSize = 1.25;
+let wakeLock = null;
 
 const textDiv = document.getElementById("text");
 const header = document.getElementById("header");
 const overlay = document.getElementById("overlay");
 const overlayInput = document.getElementById("overlayInput");
 const tempo = document.getElementById("tempo");
+
+/* HEADER */
+function updateHeader() {
+  header.textContent = `${sourceName || "Texto"} | ⏱ ${timing}s`;
+}
+
+/* WAKE LOCK */
+async function enableWakeLock() {
+  try { wakeLock = await navigator.wakeLock.request("screen"); } catch {}
+}
+function disableWakeLock() {
+  wakeLock?.release();
+  wakeLock = null;
+}
 
 /* FULLSCREEN */
 fullscreen.onclick = () =>
@@ -178,28 +208,21 @@ function renderPage() {
     .join("");
 }
 
-/* HEADER */
-function updateHeader() {
-  header.textContent = `${sourceName || "Texto"} | ⏱ ${timing}s`;
-}
-
 /* TEMPO */
 function startTempo() {
-  const interval = 1000 / timing;
   tempoTimer = setInterval(() => {
     tempo.classList.add("pulse");
     setTimeout(() => tempo.classList.remove("pulse"), 120);
-  }, interval);
+  }, 1000 / timing);
 }
 
-function stopTempo() {
-  clearInterval(tempoTimer);
-}
+function stopTempo() { clearInterval(tempoTimer); }
 
 /* PLAY */
-play.onclick = () => {
+play.onclick = async () => {
   if (timer || !pages.length) return;
   pause.disabled = false;
+  await enableWakeLock();
   startTempo();
 
   const lineDuration = (timing * 1000) / pages[currentPage].length;
@@ -223,6 +246,7 @@ pause.onclick = () => {
   clearInterval(timer);
   clearInterval(lineTimer);
   stopTempo();
+  disableWakeLock();
   timer = null;
   pause.disabled = true;
 };
@@ -231,11 +255,37 @@ pause.onclick = () => {
 prev.onclick = () => currentPage > 0 && (currentPage--, renderPage());
 next.onclick = () => currentPage < pages.length - 1 && (currentPage++, renderPage());
 
-/* TIMING + - */
-plus.onclick = () => { timing++; updateHeader(); if (timer) pause.click(); };
-minus.onclick = () => { if (timing > 1) timing--; updateHeader(); if (timer) pause.click(); };
+/* TIMING */
+plus.onclick = () => { timing++; updateHeader(); };
+minus.onclick = () => { if (timing > 1) timing--; updateHeader(); };
 
-/* FOLDER */
+/* FONT SIZE */
+fontBtn.onclick = () => {
+  overlay.style.display = "flex";
+  overlayInput.placeholder = "Tamaño texto (ej. 1.3)";
+  overlayInput.value = fontSize;
+};
+
+overlayOk.onclick = () => {
+  if (overlayInput.placeholder.includes("Tamaño")) {
+    fontSize = parseFloat(overlayInput.value) || fontSize;
+    document.documentElement.style.setProperty("--font-size", fontSize + "rem");
+  } else if (overlayInput.placeholder.includes("Segundos")) {
+    timing = Math.max(1, parseInt(overlayInput.value));
+  }
+  overlayInput.value = "";
+  overlay.style.display = "none";
+  updateHeader();
+};
+
+/* TIMING SET */
+timingBtn.onclick = () => {
+  overlay.style.display = "flex";
+  overlayInput.placeholder = "Segundos por página";
+  overlayInput.value = timing;
+};
+
+/* FILE */
 folder.onclick = () => fileInput.click();
 fileInput.onchange = async () => {
   const file = fileInput.files[0];
@@ -253,29 +303,6 @@ linkBtn.onclick = () => {
   overlayInput.placeholder = "Pega URL .txt";
 };
 
-overlayOk.onclick = async () => {
-  if (overlayInput.placeholder.includes("URL")) {
-    const res = await fetch(overlayInput.value);
-    const txt = await res.text();
-    sourceName = overlayInput.value.replace(/^https?:\/\//, "");
-    pages = splitPages(txt);
-    currentPage = 0;
-  } else {
-    timing = Math.max(1, parseInt(overlayInput.value));
-  }
-  overlayInput.value = "";
-  overlay.style.display = "none";
-  updateHeader();
-  renderPage();
-};
-
-/* TIMING SET */
-timingBtn.onclick = () => {
-  overlay.style.display = "flex";
-  overlayInput.placeholder = "Segundos por página";
-  overlayInput.value = timing;
-};
 </script>
-
 </body>
 </html>
