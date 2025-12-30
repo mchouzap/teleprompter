@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>Teleprompter</title>
 
 <style>
@@ -14,35 +14,52 @@ body {
   display: flex;
   flex-direction: column;
   height: 100vh;
+  overflow: hidden;
+}
+
+.inputs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  padding: 0.5rem;
+  background: #111;
+}
+
+.inputs input,
+.inputs button {
+  flex: 1 1 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: 0.6rem;
+  font-size: 0.95rem;
+  border-radius: 6px;
+  border: none;
+}
+
+#fileInput {
+  color: #aaa;
 }
 
 #text {
   flex: 1;
   padding: 1rem;
-  font-size: 1.4rem;
+  font-size: 1.3rem;
   line-height: 1.6;
   white-space: pre-wrap;
+  overflow: hidden;
 }
 
-.inputs, .controls {
+.controls {
   display: flex;
   gap: 0.4rem;
   padding: 0.5rem;
   background: #111;
 }
 
-input {
+.controls button {
   flex: 1;
-  padding: 0.5rem;
-  font-size: 1rem;
-  border-radius: 6px;
-  border: none;
-}
-
-button {
-  flex: 1;
+  font-size: 1.2rem;
   padding: 0.7rem;
-  font-size: 1.1rem;
   border: none;
   border-radius: 6px;
 }
@@ -62,127 +79,4 @@ button:disabled {
 <body>
 
 <div class="inputs">
-  <input id="textUrl" placeholder="URL del texto (.txt)">
-  <input id="timingInput" type="number" placeholder="Segundos" min="1">
-  <button id="load">Cargar</button>
-</div>
-
-<div id="text">Carga un texto para comenzar…</div>
-
-<div class="controls">
-  <button id="prev">⏮</button>
-  <button id="play">▶</button>
-  <button id="pause" disabled>⏸</button>
-  <button id="next">⏭</button>
-</div>
-
-<script>
-let pages = [];
-let currentPage = 0;
-let timer = null;
-let timing = 5;
-
-const textDiv = document.getElementById("text");
-const pauseBtn = document.getElementById("pause");
-
-function getParams() {
-  const p = new URLSearchParams(window.location.search);
-  return {
-    textUrl: p.get("text"),
-    timing: parseInt(p.get("timing"))
-  };
-}
-
-function splitPages(text) {
-  const lines = text.split(/\r?\n+/);
-  const size = 6;
-  const result = [];
-  for (let i = 0; i < lines.length; i += size) {
-    result.push(lines.slice(i, i + size).join("\n"));
-  }
-  return result;
-}
-
-function showPage() {
-  textDiv.textContent = pages[currentPage] || "";
-}
-
-function start() {
-  if (timer || pages.length === 0) return;
-  pauseBtn.disabled = false;
-
-  timer = setInterval(() => {
-    if (currentPage < pages.length - 1) {
-      currentPage++;
-      showPage();
-    } else {
-      stop();
-    }
-  }, timing * 1000);
-}
-
-function stop() {
-  clearInterval(timer);
-  timer = null;
-  pauseBtn.disabled = true;
-}
-
-document.getElementById("play").onclick = start;
-document.getElementById("pause").onclick = stop;
-
-document.getElementById("next").onclick = () => {
-  if (currentPage < pages.length - 1) {
-    currentPage++;
-    showPage();
-  }
-};
-
-document.getElementById("prev").onclick = () => {
-  if (currentPage > 0) {
-    currentPage--;
-    showPage();
-  }
-};
-
-document.getElementById("load").onclick = loadText;
-
-async function loadText() {
-  stop();
-  currentPage = 0;
-
-  const url = document.getElementById("textUrl").value;
-  const t = parseInt(document.getElementById("timingInput").value);
-
-  if (t > 0) timing = t;
-
-  if (!url) {
-    textDiv.textContent = "Introduce una URL válida.";
-    return;
-  }
-
-  try {
-    const res = await fetch(url);
-    const txt = await res.text();
-    pages = splitPages(txt.replace(/\r/g, ""));
-    showPage();
-  } catch {
-    textDiv.textContent = "Error cargando el texto.";
-  }
-}
-
-// Inicialización desde URL (sin autoplay)
-(function initFromURL() {
-  const p = getParams();
-  if (p.textUrl) {
-    document.getElementById("textUrl").value = p.textUrl;
-    if (p.timing) {
-      timing = p.timing;
-      document.getElementById("timingInput").value = timing;
-    }
-    loadText();
-  }
-})();
-</script>
-
-</body>
-</html>
+  <input id="textUrl" placeholder="URL del t
