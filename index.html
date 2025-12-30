@@ -17,7 +17,23 @@ body {
   overflow: hidden;
 }
 
-.inputs {
+/* Área de texto (ligeramente reducida) */
+#text {
+  flex: 1;
+  padding: 0.8rem 1rem;
+  font-size: 1.3rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow: hidden;
+}
+
+/* Resaltado */
+.highlight {
+  background: rgba(30,136,229,0.25);
+}
+
+/* Controles */
+.controls {
   display: flex;
   flex-wrap: wrap;
   gap: 0.4rem;
@@ -25,43 +41,19 @@ body {
   background: #111;
 }
 
-.inputs input,
-.inputs button {
-  flex: 1 1 100%;
+.controls input,
+.controls button {
+  flex: 1 1 30%;
   max-width: 100%;
   box-sizing: border-box;
   padding: 0.6rem;
-  font-size: 0.95rem;
+  font-size: 1rem;
   border-radius: 6px;
   border: none;
 }
 
-#fileInput {
+.controls input[type="file"] {
   color: #aaa;
-}
-
-#text {
-  flex: 1;
-  padding: 1rem;
-  font-size: 1.3rem;
-  line-height: 1.6;
-  white-space: pre-wrap;
-  overflow: hidden;
-}
-
-.controls {
-  display: flex;
-  gap: 0.4rem;
-  padding: 0.5rem;
-  background: #111;
-}
-
-.controls button {
-  flex: 1;
-  font-size: 1.2rem;
-  padding: 0.7rem;
-  border: none;
-  border-radius: 6px;
 }
 
 button:enabled {
@@ -73,65 +65,83 @@ button:disabled {
   background: #333;
   color: #777;
 }
+
+/* Modo ocultar UI */
+.hide-ui .controls {
+  display: none;
+}
 </style>
 </head>
 
 <body>
 
-<div class="inputs">
-  <input id="textUrl" placeholder="URL del texto (.txt)">
-  <input id="timingInput" type="number" placeholder="Segundos por página" min="1">
-  <input id="fileInput" type="file" accept=".txt">
-  <button id="load">Cargar texto</button>
-</div>
-
 <div id="text">Carga un texto para comenzar…</div>
 
 <div class="controls">
+  <input id="textUrl" placeholder="URL del texto (.txt)">
+  <input id="timingInput" type="number" min="1" value="7" placeholder="Segundos">
+  <input id="fileInput" type="file" accept=".txt">
+  <button id="load">Cargar</button>
+
   <button id="prev">⏮</button>
   <button id="play">▶</button>
   <button id="pause" disabled>⏸</button>
   <button id="next">⏭</button>
+
+  <button id="mirror">🔁</button>
+  <button id="toggleUI">👁️</button>
+  <button id="broadcast">📡</button>
 </div>
 
 <script>
 let pages = [];
 let currentPage = 0;
 let timer = null;
-let timing = 5;
+let timing = 7;
+let mirrored = false;
+let broadcasting = false;
 
 const textDiv = document.getElementById("text");
 const pauseBtn = document.getElementById("pause");
 let touchStartX = 0;
 
-// -------------------- URL PARAMS --------------------
-function getParams() {
-  const p = new URLSearchParams(window.location.search);
-  return {
-    textUrl: p.get("text"),
-    timing: parseInt(p.get("timing"))
-  };
+/* ---------- FULLSCREEN ---------- */
+function enterFullscreen() {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen?.();
+  }
 }
 
-// -------------------- PAGINATION --------------------
+function exitFullscreen() {
+  if (document.fullscreenElement) {
+    document.exitFullscreen?.();
+  }
+}
+
+/* ---------- PAGINACIÓN ---------- */
 function splitPages(text) {
   const lines = text.split(/\r?\n+/);
-  const linesPerPage = 15;
+  const perPage = 15;
   const result = [];
-  for (let i = 0; i < lines.length; i += linesPerPage) {
-    result.push(lines.slice(i, i + linesPerPage).join("\n"));
+  for (let i = 0; i < lines.length; i += perPage) {
+    result.push(lines.slice(i, i + perPage));
   }
   return result;
 }
 
 function showPage() {
-  textDiv.textContent = pages[currentPage] || "";
+  if (!pages.length) return;
+  textDiv.innerHTML = pages[currentPage]
+    .map((l, i) =>
+      i === 0 ? `<div class="highlight">${l}</div>` : `<div>${l}</div>`
+    ).join("");
 }
 
-// -------------------- CONTROLS --------------------
+/* ---------- PLAY / PAUSE ---------- */
 function start() {
-  if (timer || pages.length === 0) return;
+  if (timer || !pages.length) return;
   pauseBtn.disabled = false;
+  enterFullscreen();
 
   timer = setInterval(() => {
     if (currentPage < pages.length - 1) {
@@ -147,59 +157,52 @@ function stop() {
   clearInterval(timer);
   timer = null;
   pauseBtn.disabled = true;
+  if (!broadcasting) exitFullscreen();
 }
 
-document.getElementById("play").onclick = start;
-document.getElementById("pause").onclick = stop;
+play.onclick = start;
+pause.onclick = stop;
 
-document.getElementById("next").onclick = () => {
+/* ---------- NAVEGACIÓN ---------- */
+next.onclick = () => {
   if (currentPage < pages.length - 1) {
     currentPage++;
     showPage();
   }
 };
 
-document.getElementById("prev").onclick = () => {
+prev.onclick = () => {
   if (currentPage > 0) {
     currentPage--;
     showPage();
   }
 };
 
-// -------------------- LOADERS --------------------
-document.getElementById("load").onclick = loadText;
-
-async function loadText() {
+/* ---------- CARGAR TEXTO ---------- */
+load.onclick = async () => {
   stop();
   currentPage = 0;
-
-  const url = document.getElementById("textUrl").value;
-  const t = parseInt(document.getElementById("timingInput").value);
-  const file = document.getElementById("fileInput").files[0];
-
-  if (t > 0) timing = t;
+  timing = parseInt(timingInput.value) || 7;
 
   try {
-    let text = "";
-
-    if (file) {
-      text = await file.text();
-    } else if (url) {
-      const res = await fetch(url);
-      text = await res.text();
+    let txt = "";
+    if (fileInput.files[0]) {
+      txt = await fileInput.files[0].text();
+    } else if (textUrl.value) {
+      const res = await fetch(textUrl.value);
+      txt = await res.text();
     } else {
-      textDiv.textContent = "Carga un archivo TXT o una URL.";
+      textDiv.textContent = "Carga un TXT o una URL.";
       return;
     }
-
-    pages = splitPages(text.replace(/\r/g, ""));
+    pages = splitPages(txt.replace(/\r/g, ""));
     showPage();
   } catch {
     textDiv.textContent = "Error cargando el texto.";
   }
-}
+};
 
-// -------------------- SWIPE --------------------
+/* ---------- SWIPE ---------- */
 textDiv.addEventListener("touchstart", e => {
   touchStartX = e.changedTouches[0].screenX;
 });
@@ -207,28 +210,27 @@ textDiv.addEventListener("touchstart", e => {
 textDiv.addEventListener("touchend", e => {
   const diff = e.changedTouches[0].screenX - touchStartX;
   if (Math.abs(diff) > 50) {
-    if (diff < 0 && currentPage < pages.length - 1) {
-      currentPage++;
-    }
-    if (diff > 0 && currentPage > 0) {
-      currentPage--;
-    }
-    showPage();
+    diff < 0 ? next.onclick() : prev.onclick();
   }
 });
 
-// -------------------- INIT FROM URL --------------------
-(function initFromURL() {
-  const p = getParams();
-  if (p.textUrl) {
-    document.getElementById("textUrl").value = p.textUrl;
-    if (p.timing) {
-      timing = p.timing;
-      document.getElementById("timingInput").value = timing;
-    }
-    loadText();
-  }
-})();
+/* ---------- MIRROR ---------- */
+mirror.onclick = () => {
+  mirrored = !mirrored;
+  textDiv.style.transform = mirrored ? "scaleX(-1)" : "none";
+};
+
+/* ---------- TOGGLE UI ---------- */
+toggleUI.onclick = () => {
+  document.body.classList.toggle("hide-ui");
+};
+
+/* ---------- BROADCAST ---------- */
+broadcast.onclick = () => {
+  broadcasting = !broadcasting;
+  document.body.classList.toggle("hide-ui", broadcasting);
+  broadcasting ? enterFullscreen() : exitFullscreen();
+};
 </script>
 
 </body>
