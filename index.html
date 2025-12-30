@@ -61,11 +61,17 @@ body {
 
 /* CONTROLES */
 .controls {
-  display: grid;
-  grid-template-columns: repeat(8, 1fr);
+  display: flex;
+  flex-direction: column;
   gap: 6px;
   padding: 6px;
   background: #111;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  gap: 6px;
 }
 
 .controls input,
@@ -104,20 +110,29 @@ button:disabled {
 <div id="text">Carga un texto para comenzar…</div>
 
 <div class="controls">
-  <input id="textUrl" placeholder="URL .txt">
-  <input id="timingInput" type="number" min="1" value="7">
 
-  <button id="minus" class="icon">➖</button>
-  <button id="plus" class="icon">➕</button>
+  <!-- FILA 1 -->
+  <div class="row">
+    <input id="textUrl" placeholder="URL .txt" style="grid-column: span 4;">
+    <button id="load" class="icon" style="grid-column: span 1;">📂</button>
 
-  <button id="load" class="icon">📂</button>
-  <input id="fileInput" type="file" accept=".txt" hidden>
+    <input id="timingInput" type="number" min="1" value="7" style="grid-column: span 2;">
 
-  <button id="play" class="icon">▶</button>
-  <button id="pause" class="icon" disabled>⏸</button>
-  <button id="prev" class="icon">⏮⏮</button>
-  <button id="next" class="icon">⏭⏭</button>
-  <button id="fullscreen" class="icon">⤢</button>
+    <button id="minus" class="icon" style="grid-column: span 1;">➖</button>
+    <button id="plus" class="icon" style="grid-column: span 1;">➕</button>
+
+    <input id="fileInput" type="file" accept=".txt" hidden>
+  </div>
+
+  <!-- FILA 2 -->
+  <div class="row">
+    <button id="play" class="icon" style="grid-column: span 2;">▶</button>
+    <button id="pause" class="icon" disabled style="grid-column: span 2;">⏸</button>
+    <button id="prev" class="icon" style="grid-column: span 2;">⏮⏮</button>
+    <button id="next" class="icon" style="grid-column: span 2;">⏭⏭</button>
+    <button id="fullscreen" class="icon" style="grid-column: span 2;">⤢</button>
+  </div>
+
 </div>
 
 <script>
