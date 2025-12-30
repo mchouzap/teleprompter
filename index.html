@@ -7,8 +7,8 @@
 
 <style>
 :root {
-  --btn-h: 42px;
-  --font-size: min(4.2vw, 1.35rem);
+  --btn-h: 40px;
+  --font-size: min(4.1vw, 1.3rem);
 }
 
 body {
@@ -62,7 +62,7 @@ body {
 /* CONTROLES */
 .controls {
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
+  grid-template-columns: repeat(8, 1fr);
   gap: 6px;
   padding: 6px;
   background: #111;
@@ -77,8 +77,7 @@ body {
 }
 
 .controls input {
-  grid-column: span 2;
-  padding: 0 8px;
+  padding: 0 6px;
 }
 
 .controls button {
@@ -92,7 +91,7 @@ button:disabled {
 }
 
 .icon {
-  font-size: 1.2rem;
+  font-size: 1.1rem;
 }
 </style>
 </head>
@@ -108,13 +107,16 @@ button:disabled {
   <input id="textUrl" placeholder="URL .txt">
   <input id="timingInput" type="number" min="1" value="7">
 
+  <button id="minus" class="icon">➖</button>
+  <button id="plus" class="icon">➕</button>
+
   <button id="load" class="icon">📂</button>
   <input id="fileInput" type="file" accept=".txt" hidden>
 
   <button id="play" class="icon">▶</button>
   <button id="pause" class="icon" disabled>⏸</button>
-  <button id="prev" class="icon">⏮</button>
-  <button id="next" class="icon">⏭</button>
+  <button id="prev" class="icon">⏮⏮</button>
+  <button id="next" class="icon">⏭⏭</button>
   <button id="fullscreen" class="icon">⤢</button>
 </div>
 
@@ -125,13 +127,14 @@ let currentLine = 0;
 let timer = null;
 let lineTimer = null;
 let tempoTimer = null;
-let timing = 7;
 
 const textDiv = document.getElementById("text");
 const progress = document.getElementById("progress");
 const pauseBtn = document.getElementById("pause");
 const tempo = document.getElementById("tempo");
+const timingInput = document.getElementById("timingInput");
 
+/* FULLSCREEN */
 function enterFullscreen() {
   document.documentElement.requestFullscreen?.();
 }
@@ -139,10 +142,10 @@ function exitFullscreen() {
   document.exitFullscreen?.();
 }
 
-/* PAGINACIÓN */
+/* PAGINACIÓN — 12 líneas */
 function splitPages(text) {
   const lines = text.split(/\r?\n+/);
-  const perPage = 15;
+  const perPage = 12;
   const out = [];
   for (let i = 0; i < lines.length; i += perPage) {
     out.push(lines.slice(i, i + perPage));
@@ -160,7 +163,7 @@ function renderPage() {
 }
 
 /* RITMO */
-function startTempo() {
+function startTempo(timing) {
   const interval = 1000 / timing;
   tempoTimer = setInterval(() => {
     tempo.classList.add("pulse");
@@ -171,12 +174,15 @@ function stopTempo() {
   clearInterval(tempoTimer);
 }
 
-/* PLAY / PAUSE */
+/* PLAY */
 function start() {
   if (timer || !pages.length) return;
+
+  const timing = parseInt(timingInput.value) || 7;
+
   pauseBtn.disabled = false;
   enterFullscreen();
-  startTempo();
+  startTempo(timing);
 
   const linesCount = pages[currentPage].length;
   const lineDuration = (timing * 1000) / linesCount;
@@ -216,16 +222,17 @@ function stop() {
   exitFullscreen();
 }
 
+/* CONTROLES */
 play.onclick = start;
 pause.onclick = stop;
 
-/* NAV */
 next.onclick = () => {
   if (currentPage < pages.length - 1) {
     currentPage++;
     renderPage();
   }
 };
+
 prev.onclick = () => {
   if (currentPage > 0) {
     currentPage--;
@@ -233,25 +240,32 @@ prev.onclick = () => {
   }
 };
 
-/* FULLSCREEN */
 fullscreen.onclick = () => {
   document.fullscreenElement ? exitFullscreen() : enterFullscreen();
 };
 
+/* TIMING ➖ ➕ */
+minus.onclick = () => {
+  let v = parseInt(timingInput.value) || 7;
+  if (v > 1) timingInput.value = v - 1;
+  if (timer) { stop(); start(); }
+};
+
+plus.onclick = () => {
+  let v = parseInt(timingInput.value) || 7;
+  timingInput.value = v + 1;
+  if (timer) { stop(); start(); }
+};
+
 /* LOAD */
 load.onclick = () => fileInput.click();
+
 fileInput.onchange = async () => {
   stop();
-  timing = parseInt(timingInput.value) || 7;
   let txt = "";
-
   if (fileInput.files[0]) {
     txt = await fileInput.files[0].text();
-  } else if (textUrl.value) {
-    const res = await fetch(textUrl.value);
-    txt = await res.text();
   }
-
   pages = splitPages(txt.replace(/\r/g, ""));
   currentPage = 0;
   renderPage();
