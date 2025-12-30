@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>Teleprompter</title>
+<title>Chou's Teleprompter</title>
 
 <style>
 :root {
@@ -100,4 +100,200 @@ body {
   padding: 0.08em 0;
 }
 
-.highlight
+.highlight {
+  background: rgba(30,136,229,0.28);
+}
+
+/* ───────── BOTTOM CONTROLS ───────── */
+#bottomControls {
+  position: sticky;
+  bottom: 0;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+  padding: 6px;
+  background: #111;
+}
+
+#bottomControls button {
+  height: var(--btn-h);
+  border-radius: 6px;
+  border: none;
+  background: #1e88e5;
+  color: #fff;
+  font-size: 1rem;
+}
+
+button:disabled {
+  background: #333;
+  color: #777;
+}
+</style>
+</head>
+
+<body>
+
+<div id="app">
+
+  <!-- TOP -->
+  <div id="topControls">
+    <input id="textUrl" placeholder="URL .txt">
+    <button id="load">📂</button>
+
+    <input id="timingInput" type="number" min="1" value="7" style="width:60px">
+    <button id="minus">➖</button>
+    <button id="plus">➕</button>
+
+    <input id="fileInput" type="file" accept=".txt" hidden>
+  </div>
+
+  <!-- TEXT -->
+  <div id="textWrapper">
+    <div id="progress"></div>
+    <div id="tempo"></div>
+    <div id="text">Carga un URL valido a un texto o sube un archivo para comenzar…</div>
+  </div>
+
+  <!-- BOTTOM -->
+  <div id="bottomControls">
+    <button id="play">▶</button>
+    <button id="pause" disabled>⏸</button>
+    <button id="prev">⏮</button>
+    <button id="next">⏭</button>
+    <button id="fullscreen">⤢</button>
+  </div>
+
+</div>
+
+<script>
+let pages = [];
+let currentPage = 0;
+let currentLine = 0;
+let timer = null;
+let lineTimer = null;
+let tempoTimer = null;
+
+const textDiv = document.getElementById("text");
+const pauseBtn = document.getElementById("pause");
+const tempo = document.getElementById("tempo");
+const timingInput = document.getElementById("timingInput");
+const textUrl = document.getElementById("textUrl");
+
+/* FULLSCREEN */
+function enterFullscreen() {
+  document.documentElement.requestFullscreen?.();
+}
+function exitFullscreen() {
+  document.exitFullscreen?.();
+}
+
+/* PAGINATION */
+function splitPages(text) {
+  const lines = text.split(/\r?\n+/);
+  const perPage = 12;
+  const out = [];
+  for (let i = 0; i < lines.length; i += perPage) {
+    out.push(lines.slice(i, i + perPage));
+  }
+  return out;
+}
+
+function renderPage() {
+  currentLine = 0;
+  textDiv.innerHTML = pages[currentPage]
+    .map((l, i) =>
+      `<div class="line ${i === 0 ? "highlight" : ""}">${l}</div>`
+    ).join("");
+}
+
+/* TEMPO */
+function startTempo(timing) {
+  const interval = 1000 / timing;
+  tempoTimer = setInterval(() => {
+    tempo.classList.add("pulse");
+    setTimeout(() => tempo.classList.remove("pulse"), 120);
+  }, interval);
+}
+
+function stopTempo() {
+  clearInterval(tempoTimer);
+}
+
+/* PLAY */
+function start() {
+  if (timer || !pages.length) return;
+
+  const timing = parseInt(timingInput.value) || 7;
+  pauseBtn.disabled = false;
+  enterFullscreen();
+  startTempo(timing);
+
+  const linesCount = pages[currentPage].length;
+  const lineDuration = (timing * 1000) / linesCount;
+
+  lineTimer = setInterval(() => {
+    const lines = document.querySelectorAll(".line");
+    if (currentLine < lines.length - 1) {
+      lines[currentLine].classList.remove("highlight");
+      currentLine++;
+      lines[currentLine].classList.add("highlight");
+    }
+  }, lineDuration);
+
+  timer = setInterval(() => {
+    if (currentPage < pages.length - 1) {
+      currentPage++;
+      renderPage();
+    } else {
+      stop();
+    }
+  }, timing * 1000);
+}
+
+function stop() {
+  clearInterval(timer);
+  clearInterval(lineTimer);
+  stopTempo();
+  timer = null;
+  pauseBtn.disabled = true;
+  exitFullscreen();
+}
+
+/* CONTROLS */
+play.onclick = start;
+pause.onclick = stop;
+prev.onclick = () => currentPage > 0 && (currentPage--, renderPage());
+next.onclick = () => currentPage < pages.length - 1 && (currentPage++, renderPage());
+fullscreen.onclick = () => document.fullscreenElement ? exitFullscreen() : enterFullscreen();
+
+/* TIMING */
+minus.onclick = () => {
+  let v = parseInt(timingInput.value) || 7;
+  if (v > 1) timingInput.value = v - 1;
+  if (timer) { stop(); start(); }
+};
+plus.onclick = () => {
+  let v = parseInt(timingInput.value) || 7;
+  timingInput.value = v + 1;
+  if (timer) { stop(); start(); }
+};
+
+/* LOAD */
+load.onclick = () => fileInput.click();
+
+fileInput.onchange = async () => {
+  stop();
+  const file = fileInput.files[0];
+  const txt = await file.text();
+
+  textUrl.value = file.name;
+  textUrl.readOnly = true;
+
+  pages = splitPages(txt.replace(/\r/g, ""));
+  currentPage = 0;
+  renderPage();
+};
+</script>
+
+</body>
+</html>
