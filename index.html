@@ -3,12 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>Chou's Teleprompter</title>
+<title>Teleprompter</title>
 
 <style>
 :root {
   --btn-h: 32px;
-  --font-size: min(4vw, 1.25rem);
+  --font-size: 1.25rem;
 }
 
 * { box-sizing: border-box; }
@@ -47,14 +47,14 @@ body {
 }
 
 .controls.top {
-  grid-template-columns: repeat(6, 1fr);
+  grid-template-columns: repeat(8, 1fr);
 }
 
 .controls.bottom {
   grid-template-columns: repeat(5, 1fr);
 }
 
-.controls button {
+button {
   height: var(--btn-h);
   border-radius: 6px;
   border: none;
@@ -66,22 +66,6 @@ body {
 button:disabled {
   background: #333;
   color: #777;
-}
-
-/* OVERLAY */
-#overlay {
-  display: none;
-  gap: 6px;
-  padding: 6px;
-  background: #111;
-}
-
-#overlay input {
-  flex: 1;
-  height: var(--btn-h);
-  border-radius: 6px;
-  border: none;
-  padding: 0 8px;
 }
 
 /* TEXT */
@@ -112,6 +96,7 @@ button:disabled {
 
 .line { padding: 0.08em 0; }
 .highlight { background: rgba(30,136,229,0.28); }
+
 </style>
 </head>
 
@@ -124,10 +109,14 @@ button:disabled {
 <div class="controls top">
   <button id="folder">📁</button>
   <button id="linkBtn">🔗</button>
+
   <button id="timingBtn">⏱</button>
+  <button id="timingPlus">➕</button>
+  <button id="timingMinus">➖</button>
+
   <button id="fontBtn">🔤</button>
-  <button id="plus">➕</button>
-  <button id="minus">➖</button>
+  <button id="fontPlus">➕</button>
+  <button id="fontMinus">➖</button>
 </div>
 
 <!-- BOTTOM CONTROLS -->
@@ -137,12 +126,6 @@ button:disabled {
   <button id="prev">⏮</button>
   <button id="next">⏭</button>
   <button id="fullscreen">⤢</button>
-</div>
-
-<!-- OVERLAY -->
-<div id="overlay">
-  <input id="overlayInput">
-  <button id="overlayOk">OK</button>
 </div>
 
 <div id="textWrapper">
@@ -161,15 +144,14 @@ let currentLine = 0;
 let timer = null;
 let lineTimer = null;
 let tempoTimer = null;
+
 let timing = 7;
-let sourceName = "";
 let fontSize = 1.25;
+let sourceName = "";
 let wakeLock = null;
 
 const textDiv = document.getElementById("text");
 const header = document.getElementById("header");
-const overlay = document.getElementById("overlay");
-const overlayInput = document.getElementById("overlayInput");
 const tempo = document.getElementById("tempo");
 
 /* HEADER */
@@ -215,7 +197,6 @@ function startTempo() {
     setTimeout(() => tempo.classList.remove("pulse"), 120);
   }, 1000 / timing);
 }
-
 function stopTempo() { clearInterval(tempoTimer); }
 
 /* PLAY */
@@ -255,34 +236,18 @@ pause.onclick = () => {
 prev.onclick = () => currentPage > 0 && (currentPage--, renderPage());
 next.onclick = () => currentPage < pages.length - 1 && (currentPage++, renderPage());
 
-/* TIMING */
-plus.onclick = () => { timing++; updateHeader(); };
-minus.onclick = () => { if (timing > 1) timing--; updateHeader(); };
+/* TIMING + / - */
+timingPlus.onclick = () => { timing++; updateHeader(); };
+timingMinus.onclick = () => { if (timing > 1) timing--; updateHeader(); };
 
-/* FONT SIZE */
-fontBtn.onclick = () => {
-  overlay.style.display = "flex";
-  overlayInput.placeholder = "Tamaño texto (ej. 1.3)";
-  overlayInput.value = fontSize;
+/* FONT SIZE + / - */
+fontPlus.onclick = () => {
+  fontSize = Math.min(3, fontSize + 0.1);
+  document.documentElement.style.setProperty("--font-size", fontSize + "rem");
 };
-
-overlayOk.onclick = () => {
-  if (overlayInput.placeholder.includes("Tamaño")) {
-    fontSize = parseFloat(overlayInput.value) || fontSize;
-    document.documentElement.style.setProperty("--font-size", fontSize + "rem");
-  } else if (overlayInput.placeholder.includes("Segundos")) {
-    timing = Math.max(1, parseInt(overlayInput.value));
-  }
-  overlayInput.value = "";
-  overlay.style.display = "none";
-  updateHeader();
-};
-
-/* TIMING SET */
-timingBtn.onclick = () => {
-  overlay.style.display = "flex";
-  overlayInput.placeholder = "Segundos por página";
-  overlayInput.value = timing;
+fontMinus.onclick = () => {
+  fontSize = Math.max(0.8, fontSize - 0.1);
+  document.documentElement.style.setProperty("--font-size", fontSize + "rem");
 };
 
 /* FILE */
@@ -298,10 +263,52 @@ fileInput.onchange = async () => {
 };
 
 /* LINK */
-linkBtn.onclick = () => {
-  overlay.style.display = "flex";
-  overlayInput.placeholder = "Pega URL .txt";
+linkBtn.onclick = async () => {
+  const url = prompt("Pega URL .txt");
+  if (!url) return;
+  const res = await fetch(url);
+  const txt = await res.text();
+  sourceName = url.replace(/^https?:\/\//, "");
+  pages = splitPages(txt);
+  currentPage = 0;
+  updateHeader();
+  renderPage();
 };
+
+  /* URL PARAMETERS */
+(function loadFromURL() {
+  const params = new URLSearchParams(window.location.search);
+
+  const textURL = params.get("text");
+  const timingParam = params.get("timing");
+  const fontParam = params.get("font");
+
+  if (timingParam) {
+    timing = Math.max(1, parseInt(timingParam));
+    updateHeader();
+  }
+
+  if (fontParam) {
+    fontSize = Math.max(1,parseFloat(fontParam));
+    document.documentElement.style.setProperty(
+      "--font-size",
+      fontSize + "rem"
+    );
+  }
+
+  if (textURL) {
+    fetch(textURL)
+      .then(r => r.text())
+      .then(txt => {
+        sourceName = textURL.replace(/^https?:\/\//, "");
+        pages = splitPages(txt);
+        currentPage = 0;
+        updateHeader();
+        renderPage();
+      })
+      .catch(() => console.warn("No se pudo cargar texto desde URL"));
+  }
+})();
 
 </script>
 </body>
