@@ -3,12 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>Teleprompter by Chou</title>
+<title>Teleprompter</title>
 
 <style>
 :root {
-  --btn-h: 40px;
-  --font-size: min(4.1vw, 1.3rem);
+  --btn-h: 32px;
+  --font-size: min(4vw, 1.25rem);
 }
 
 body {
@@ -16,24 +16,45 @@ body {
   background: #000;
   color: #fff;
   font-family: system-ui, sans-serif;
-  display: flex;
-  flex-direction: column;
   height: 100vh;
   overflow: hidden;
 }
 
-#progress {
-  height: 3px;
+#topControls {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto auto;
+  gap: 6px;
+  padding: 6px;
+  background: #111;
+}
+
+#topControls input,
+#topControls button {
+  height: var(--btn-h);
+  font-size: 0.9rem;
+  border-radius: 6px;
+  border: none;
+}
+
+#topControls input {
+  padding: 0 8px;
+}
+
+#topControls button {
   background: #1e88e5;
-  width: 0%;
+  color: #fff;
+}
+
+.icon {
+  font-size: 1rem;
 }
 
 #tempo {
   position: absolute;
-  top: 6px;
+  top: 42px;
   right: 10px;
-  width: 9px;
-  height: 9px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   background: #555;
 }
@@ -42,8 +63,14 @@ body {
   background: #1e88e5;
 }
 
+#progress {
+  height: 3px;
+  background: #1e88e5;
+  width: 0%;
+}
+
 #text {
-  flex: 1;
+  height: calc(100vh - 90px);
   padding: 1vh 4vw;
   font-size: var(--font-size);
   line-height: 1.55;
@@ -52,87 +79,62 @@ body {
 }
 
 .line {
-  padding: 0.1em 0;
+  padding: 0.08em 0;
 }
 
 .highlight {
-  background: rgba(30,136,229,0.3);
+  background: rgba(30,136,229,0.28);
 }
 
-/* CONTROLES */
-.controls {
-  display: flex;
-  flex-direction: column;
+/* BOTONES INFERIORES */
+#bottomControls {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
   gap: 6px;
   padding: 6px;
   background: #111;
 }
 
-.row {
-  display: grid;
-  grid-template-columns: repeat(10, 1fr);
-  gap: 6px;
-}
-
-.controls input,
-.controls button {
+#bottomControls button {
   height: var(--btn-h);
-  font-size: 1rem;
   border-radius: 6px;
   border: none;
-}
-
-.controls input {
-  padding: 0 6px;
-}
-
-.controls button {
   background: #1e88e5;
   color: #fff;
+  font-size: 1rem;
 }
 
 button:disabled {
   background: #333;
   color: #777;
 }
-
-.icon {
-  font-size: 1.1rem;
-}
 </style>
 </head>
 
 <body>
 
-<div id="tempo"></div>
+<div id="topControls">
+  <input id="textUrl" placeholder="URL .txt">
+  <button id="load" class="icon">📂</button>
+
+  <input id="timingInput" type="number" min="1" value="7" style="width:60px">
+  <button id="minus" class="icon">➖</button>
+  <button id="plus" class="icon">➕</button>
+
+  <input id="fileInput" type="file" accept=".txt" hidden>
+</div>
+
 <div id="progress"></div>
+<div id="tempo"></div>
 
-<div id="text">Carga un texto o URL al texto para comenzar…</div>
+<div id="text">Carga un texto para comenzar…</div>
 
-<div class="controls">
-
-  <!-- FILA 1 -->
-  <div class="row">
-    <input id="textUrl" placeholder="URL .txt" style="grid-column: span 4;">
-    <button id="load" class="icon" style="grid-column: span 1;">📂</button>
-
-    <input id="timingInput" type="number" min="1" value="7" style="grid-column: span 2;">
-
-    <button id="minus" class="icon" style="grid-column: span 1;">➖</button>
-    <button id="plus" class="icon" style="grid-column: span 1;">➕</button>
-
-    <input id="fileInput" type="file" accept=".txt" hidden>
-  </div>
-
-  <!-- FILA 2 -->
-  <div class="row">
-    <button id="play" class="icon" style="grid-column: span 2;">▶</button>
-    <button id="pause" class="icon" disabled style="grid-column: span 2;">⏸</button>
-    <button id="prev" class="icon" style="grid-column: span 2;">⏮</button>
-    <button id="next" class="icon" style="grid-column: span 2;">⏭</button>
-    <button id="fullscreen" class="icon" style="grid-column: span 2;">⤢</button>
-  </div>
-
+<div id="bottomControls">
+  <button id="play">▶</button>
+  <button id="pause" disabled>⏸</button>
+  <button id="prev">⏮</button>
+  <button id="next">⏭</button>
+  <button id="fullscreen">⤢</button>
 </div>
 
 <script>
@@ -144,10 +146,10 @@ let lineTimer = null;
 let tempoTimer = null;
 
 const textDiv = document.getElementById("text");
-const progress = document.getElementById("progress");
 const pauseBtn = document.getElementById("pause");
 const tempo = document.getElementById("tempo");
 const timingInput = document.getElementById("timingInput");
+const textUrl = document.getElementById("textUrl");
 
 /* FULLSCREEN */
 function enterFullscreen() {
@@ -157,7 +159,7 @@ function exitFullscreen() {
   document.exitFullscreen?.();
 }
 
-/* PAGINACIÓN — 12 líneas */
+/* PAGINACIÓN */
 function splitPages(text) {
   const lines = text.split(/\r?\n+/);
   const perPage = 12;
@@ -174,7 +176,6 @@ function renderPage() {
     .map((l, i) =>
       `<div class="line ${i === 0 ? "highlight" : ""}">${l}</div>`
     ).join("");
-  progress.style.width = "0%";
 }
 
 /* RITMO */
@@ -185,6 +186,7 @@ function startTempo(timing) {
     setTimeout(() => tempo.classList.remove("pulse"), 120);
   }, interval);
 }
+
 function stopTempo() {
   clearInterval(tempoTimer);
 }
@@ -194,14 +196,12 @@ function start() {
   if (timer || !pages.length) return;
 
   const timing = parseInt(timingInput.value) || 7;
-
   pauseBtn.disabled = false;
   enterFullscreen();
   startTempo(timing);
 
   const linesCount = pages[currentPage].length;
   const lineDuration = (timing * 1000) / linesCount;
-  let elapsed = 0;
 
   lineTimer = setInterval(() => {
     const lines = document.querySelectorAll(".line");
@@ -220,12 +220,6 @@ function start() {
       stop();
     }
   }, timing * 1000);
-
-  const progressTimer = setInterval(() => {
-    elapsed += 100;
-    progress.style.width = `${(elapsed / (timing * 1000)) * 100}%`;
-    if (!timer) clearInterval(progressTimer);
-  }, 100);
 }
 
 function stop() {
@@ -237,35 +231,19 @@ function stop() {
   exitFullscreen();
 }
 
-/* CONTROLES */
+/* BOTONES */
 play.onclick = start;
 pause.onclick = stop;
+prev.onclick = () => currentPage > 0 && (currentPage--, renderPage());
+next.onclick = () => currentPage < pages.length - 1 && (currentPage++, renderPage());
+fullscreen.onclick = () => document.fullscreenElement ? exitFullscreen() : enterFullscreen();
 
-next.onclick = () => {
-  if (currentPage < pages.length - 1) {
-    currentPage++;
-    renderPage();
-  }
-};
-
-prev.onclick = () => {
-  if (currentPage > 0) {
-    currentPage--;
-    renderPage();
-  }
-};
-
-fullscreen.onclick = () => {
-  document.fullscreenElement ? exitFullscreen() : enterFullscreen();
-};
-
-/* TIMING ➖ ➕ */
+/* TIMING */
 minus.onclick = () => {
   let v = parseInt(timingInput.value) || 7;
   if (v > 1) timingInput.value = v - 1;
   if (timer) { stop(); start(); }
 };
-
 plus.onclick = () => {
   let v = parseInt(timingInput.value) || 7;
   timingInput.value = v + 1;
@@ -277,10 +255,13 @@ load.onclick = () => fileInput.click();
 
 fileInput.onchange = async () => {
   stop();
-  let txt = "";
-  if (fileInput.files[0]) {
-    txt = await fileInput.files[0].text();
-  }
+  const file = fileInput.files[0];
+  const txt = await file.text();
+
+  textUrl.value = file.name;
+  textUrl.readOnly = true;
+  textUrl.style.gridColumn = "1 / span 2";
+
   pages = splitPages(txt.replace(/\r/g, ""));
   currentPage = 0;
   renderPage();
