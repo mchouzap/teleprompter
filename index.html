@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>Teleprompter by Chou</title>
+<title>Teleprompter</title>
 
 <style>
 body {
@@ -21,7 +21,6 @@ body {
   height: 4px;
   background: #1e88e5;
   width: 0%;
-  transition: width 0.1s linear;
 }
 
 #text {
@@ -41,6 +40,22 @@ body {
   background: rgba(30,136,229,0.3);
 }
 
+/* Ritmo */
+#tempo {
+  position: absolute;
+  top: 6px;
+  right: 10px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #555;
+}
+
+.pulse {
+  background: #1e88e5;
+}
+
+/* Controles */
 .controls {
   display: flex;
   flex-wrap: wrap;
@@ -60,24 +75,21 @@ body {
 
 button:enabled {
   background: #1e88e5;
-  color: #fff;
+  color: white;
 }
 
 button:disabled {
   background: #333;
   color: #777;
 }
-
-.hide-ui .controls {
-  display: none;
-}
 </style>
 </head>
 
 <body>
 
+<div id="tempo"></div>
 <div id="progress"></div>
-<div id="text">Carga un texto ya sea mediante una url o el archivo para comenzar…</div>
+<div id="text">Carga un texto para comenzar…</div>
 
 <div class="controls">
   <input id="textUrl" placeholder="URL del texto (.txt)">
@@ -85,14 +97,12 @@ button:disabled {
   <input id="fileInput" type="file" accept=".txt">
   <button id="load">Cargar</button>
 
-  <button id="prev">⏮</button>
+  <button id="prev">⏮⏮</button>
   <button id="play">▶</button>
   <button id="pause" disabled>⏸</button>
-  <button id="next">⏭</button>
+  <button id="next">⏭⏭</button>
 
-  <button id="mirror">🔁</button>
-  <button id="toggleUI">👁️</button>
-  <button id="broadcast">📡</button>
+  <button id="fullscreen">⤢</button>
 </div>
 
 <script>
@@ -101,13 +111,15 @@ let currentPage = 0;
 let currentLine = 0;
 let timer = null;
 let lineTimer = null;
+let tempoTimer = null;
 let timing = 7;
-let broadcasting = false;
 
 const textDiv = document.getElementById("text");
 const progress = document.getElementById("progress");
 const pauseBtn = document.getElementById("pause");
+const tempo = document.getElementById("tempo");
 
+/* ---------- FULLSCREEN ---------- */
 function enterFullscreen() {
   document.documentElement.requestFullscreen?.();
 }
@@ -115,6 +127,7 @@ function exitFullscreen() {
   document.exitFullscreen?.();
 }
 
+/* ---------- PAGINACIÓN ---------- */
 function splitPages(text) {
   const lines = text.split(/\r?\n+/);
   const perPage = 15;
@@ -134,33 +147,46 @@ function renderPage() {
   progress.style.width = "0%";
 }
 
-function advanceLine() {
-  const lines = document.querySelectorAll(".line");
-  if (currentLine < lines.length - 1) {
-    lines[currentLine].classList.remove("highlight");
-    currentLine++;
-    lines[currentLine].classList.add("highlight");
-  }
+/* ---------- RITMO ---------- */
+function startTempo() {
+  const interval = 1000 / timing;
+  tempoTimer = setInterval(() => {
+    tempo.classList.add("pulse");
+    setTimeout(() => tempo.classList.remove("pulse"), 150);
+  }, interval);
 }
 
+function stopTempo() {
+  clearInterval(tempoTimer);
+}
+
+/* ---------- PLAY / PAUSE ---------- */
 function start() {
   if (timer || !pages.length) return;
   pauseBtn.disabled = false;
   enterFullscreen();
+  startTempo();
 
   const linesCount = pages[currentPage].length;
   const lineDuration = (timing * 1000) / linesCount;
   let elapsed = 0;
 
   lineTimer = setInterval(() => {
-    advanceLine();
+    const lines = document.querySelectorAll(".line");
+    if (currentLine < lines.length - 1) {
+      lines[currentLine].classList.remove("highlight");
+      currentLine++;
+      lines[currentLine].classList.add("highlight");
+    }
   }, lineDuration);
 
   timer = setInterval(() => {
-    currentPage < pages.length - 1 ? currentPage++ : stop();
-    renderPage();
-    clearInterval(lineTimer);
-    start();
+    if (currentPage < pages.length - 1) {
+      currentPage++;
+      renderPage();
+    } else {
+      stop();
+    }
   }, timing * 1000);
 
   const progressInterval = setInterval(() => {
@@ -173,21 +199,22 @@ function start() {
 function stop() {
   clearInterval(timer);
   clearInterval(lineTimer);
+  stopTempo();
   timer = null;
   pauseBtn.disabled = true;
-  if (!broadcasting) exitFullscreen();
+  exitFullscreen();
 }
 
 play.onclick = start;
 pause.onclick = stop;
 
+/* ---------- NAV ---------- */
 next.onclick = () => {
   if (currentPage < pages.length - 1) {
     currentPage++;
     renderPage();
   }
 };
-
 prev.onclick = () => {
   if (currentPage > 0) {
     currentPage--;
@@ -195,6 +222,12 @@ prev.onclick = () => {
   }
 };
 
+/* ---------- FULLSCREEN TOGGLE ---------- */
+fullscreen.onclick = () => {
+  document.fullscreenElement ? exitFullscreen() : enterFullscreen();
+};
+
+/* ---------- LOAD ---------- */
 load.onclick = async () => {
   stop();
   timing = parseInt(timingInput.value) || 7;
@@ -210,21 +243,6 @@ load.onclick = async () => {
   pages = splitPages(txt.replace(/\r/g, ""));
   currentPage = 0;
   renderPage();
-};
-
-mirror.onclick = () => {
-  textDiv.style.transform =
-    textDiv.style.transform ? "" : "scaleX(-1)";
-};
-
-toggleUI.onclick = () => {
-  document.body.classList.toggle("hide-ui");
-};
-
-broadcast.onclick = () => {
-  broadcasting = !broadcasting;
-  document.body.classList.toggle("hide-ui", broadcasting);
-  broadcasting ? enterFullscreen() : exitFullscreen();
 };
 </script>
 
