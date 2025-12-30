@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>Teleprompter</title>
+<title>Chou's Teleprompter</title>
 
 <style>
 :root {
@@ -103,7 +103,7 @@ button:disabled {
 <body>
 <div id="app">
 
-<div id="header">Sin texto cargado</div>
+<div id="header">Use los botones de Carpeta y Link para cargar el texto</div>
 
 <!-- TOP CONTROLS -->
 <div class="controls top">
@@ -145,7 +145,7 @@ let timer = null;
 let lineTimer = null;
 let tempoTimer = null;
 
-let timing = 7;
+let timing = 16;
 let fontSize = 1.25;
 let sourceName = "";
 let wakeLock = null;
@@ -178,8 +178,8 @@ fullscreen.onclick = () =>
 function splitPages(text) {
   const lines = text.split(/\r?\n+/);
   const out = [];
-  for (let i = 0; i < lines.length; i += 12)
-    out.push(lines.slice(i, i + 12));
+  for (let i = 0; i < lines.length; i += 15)
+    out.push(lines.slice(i, i + 15));
   return out;
 }
 
