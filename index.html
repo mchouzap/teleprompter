@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>Chou's Teleprompter</title>
+<title>Teleprompter</title>
 
 <style>
 :root {
@@ -154,7 +154,7 @@ let timer = null;
 let lineTimer = null;
 let tempoTimer = null;
 
-let timing = 25;
+let timing = 7;
 let fontSize = 1.25;
 let sourceName = "";
 let wakeLock = null;
@@ -162,6 +162,20 @@ let wakeLock = null;
 const textDiv = document.getElementById("text");
 const header = document.getElementById("header");
 const tempo = document.getElementById("tempo");
+
+/* =========================
+   CORE STATE SETTERS
+   ========================= */
+function setTiming(value) {
+  timing = Math.max(1, value);
+  updateHeader();
+  restartPlaybackIfRunning();
+}
+
+function setFontSize(value) {
+  fontSize = Math.min(3, Math.max(0.8, value));
+  document.documentElement.style.setProperty("--font-size", fontSize + "rem");
+}
 
 /* HEADER */
 function updateHeader() {
@@ -192,7 +206,7 @@ function splitPages(text) {
   return out;
 }
 
-/* UTIL: ¿línea válida para detenerse? */
+/* SKIPPABLE LINES */
 function isSkippable(line) {
   return !line.trim() || line.trim().startsWith("|");
 }
@@ -203,24 +217,18 @@ function renderPage() {
   textDiv.innerHTML = pages[currentPage]
     .map(l => `<div class="line">${l}</div>`)
     .join("");
-
   advanceToNextValidLine();
 }
 
-/* AVANZA HASTA LÍNEA VÁLIDA */
 function advanceToNextValidLine() {
   const lines = document.querySelectorAll(".line");
-
   while (
     currentLine < lines.length &&
     isSkippable(lines[currentLine].textContent)
   ) {
     currentLine++;
   }
-
-  if (lines[currentLine]) {
-    lines[currentLine].classList.add("highlight");
-  }
+  lines[currentLine]?.classList.add("highlight");
 }
 
 /* TEMPO */
@@ -232,7 +240,7 @@ function startTempo() {
 }
 function stopTempo() { clearInterval(tempoTimer); }
 
-/* RESTART SI CAMBIA TIMING */
+/* RESTART PLAY IF RUNNING */
 function restartPlaybackIfRunning() {
   if (timer) {
     pause.click();
@@ -243,13 +251,15 @@ function restartPlaybackIfRunning() {
 /* PLAY */
 play.onclick = async () => {
   if (timer || !pages.length) return;
+
   pause.disabled = false;
   await enableWakeLock();
   startTempo();
 
-  const lines = document.querySelectorAll(".line");
-  const validLines = pages[currentPage].filter(l => !isSkippable(l)).length;
-  const lineDuration = (timing * 1000) / Math.max(1, validLines);
+  const validLines =
+    pages[currentPage].filter(l => !isSkippable(l)).length || 1;
+
+  const lineDuration = (timing * 1000) / validLines;
 
   lineTimer = setInterval(() => {
     const lines = document.querySelectorAll(".line");
@@ -277,19 +287,14 @@ pause.onclick = () => {
 prev.onclick = () => currentPage > 0 && (currentPage--, renderPage());
 next.onclick = () => currentPage < pages.length - 1 && (currentPage++, renderPage());
 
-/* TIMING */
-timingPlus.onclick = () => { timing++; updateHeader(); restartPlaybackIfRunning(); };
-timingMinus.onclick = () => { if (timing > 1) timing--; updateHeader(); restartPlaybackIfRunning(); };
+/* TIMING BUTTONS */
+timingPlus.onclick = () => setTiming(timing + 1);
+timingMinus.onclick = () => setTiming(timing - 1);
+timingBtn.onclick = () => restartPlaybackIfRunning();
 
-/* FONT SIZE */
-fontPlus.onclick = () => {
-  fontSize = Math.min(3, fontSize + 0.1);
-  document.documentElement.style.setProperty("--font-size", fontSize + "rem");
-};
-fontMinus.onclick = () => {
-  fontSize = Math.max(0.8, fontSize - 0.1);
-  document.documentElement.style.setProperty("--font-size", fontSize + "rem");
-};
+/* FONT SIZE BUTTONS */
+fontPlus.onclick = () => setFontSize(fontSize + 0.1);
+fontMinus.onclick = () => setFontSize(fontSize - 0.1);
 
 /* FILE */
 folder.onclick = () => fileInput.click();
@@ -316,55 +321,33 @@ linkBtn.onclick = async () => {
   renderPage();
 };
 
-  /* =========================
+/* =========================
    LOAD FROM URL PARAMETERS
    ========================= */
 (function loadFromURL() {
   const params = new URLSearchParams(window.location.search);
 
-  const textURL = params.get("text");
-  const timingParam = params.get("timing");
-  const fontParam = params.get("font");
-  const pageParam = params.get("page");
-
-  /* timing */
-  if (timingParam && !isNaN(timingParam)) {
-    timing = Math.max(1, parseInt(timingParam));
+  if (params.get("timing")) {
+    setTiming(parseInt(params.get("timing")));
   }
 
-  /* font size */
-  if (fontParam && !isNaN(fontParam)) {
-    fontSize = Math.min(3, Math.max(0.8, parseFloat(fontParam)));
-    document.documentElement.style.setProperty(
-      "--font-size",
-      fontSize + "rem"
-    );
+  if (params.get("font")) {
+    setFontSize(parseFloat(params.get("font")));
   }
 
-  /* page */
-  if (pageParam && !isNaN(pageParam)) {
-    currentPage = Math.max(0, parseInt(pageParam));
-  }
-
-  /* text */
-  if (textURL) {
-    fetch(textURL)
+  if (params.get("text")) {
+    fetch(params.get("text"))
       .then(r => r.text())
       .then(txt => {
-        sourceName = textURL.replace(/^https?:\/\//, "");
+        sourceName = params.get("text").replace(/^https?:\/\//, "");
         pages = splitPages(txt);
-        currentPage = Math.min(currentPage, pages.length - 1);
+        currentPage = 0;
         updateHeader();
         renderPage();
-      })
-      .catch(() =>
-        console.warn("No se pudo cargar el texto desde URL")
-      );
-  } else {
-    updateHeader();
+      });
   }
 })();
-
 </script>
+
 </body>
 </html>
