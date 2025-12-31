@@ -315,6 +315,56 @@ linkBtn.onclick = async () => {
   updateHeader();
   renderPage();
 };
+
+  /* =========================
+   LOAD FROM URL PARAMETERS
+   ========================= */
+(function loadFromURL() {
+  const params = new URLSearchParams(window.location.search);
+
+  const textURL = params.get("text");
+  const timingParam = params.get("timing");
+  const fontParam = params.get("font");
+  const pageParam = params.get("page");
+
+  /* timing */
+  if (timingParam && !isNaN(timingParam)) {
+    timing = Math.max(1, parseInt(timingParam));
+  }
+
+  /* font size */
+  if (fontParam && !isNaN(fontParam)) {
+    fontSize = Math.min(3, Math.max(0.8, parseFloat(fontParam)));
+    document.documentElement.style.setProperty(
+      "--font-size",
+      fontSize + "rem"
+    );
+  }
+
+  /* page */
+  if (pageParam && !isNaN(pageParam)) {
+    currentPage = Math.max(0, parseInt(pageParam));
+  }
+
+  /* text */
+  if (textURL) {
+    fetch(textURL)
+      .then(r => r.text())
+      .then(txt => {
+        sourceName = textURL.replace(/^https?:\/\//, "");
+        pages = splitPages(txt);
+        currentPage = Math.min(currentPage, pages.length - 1);
+        updateHeader();
+        renderPage();
+      })
+      .catch(() =>
+        console.warn("No se pudo cargar el texto desde URL")
+      );
+  } else {
+    updateHeader();
+  }
+})();
+
 </script>
 </body>
 </html>
