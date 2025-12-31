@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>Teleprompter</title>
+<title>Chou's Teleprompter</title>
 
 <style>
 :root {
@@ -112,7 +112,9 @@ button:disabled {
 <body>
 <div id="app">
 
-<div id="header">Sin texto cargado</div>
+<div id="header">
+  Para comenzar agrega un texto vía URL o carga el archivo *.txt
+</div>
 
 <!-- TOP CONTROLS -->
 <div class="controls top">
@@ -139,7 +141,7 @@ button:disabled {
 
 <div id="textWrapper">
   <div id="tempo"></div>
-  <div id="text">Carga un texto para comenzar…</div>
+  <div id="text">Chou’s Teleprompter</div>
 </div>
 
 <input id="fileInput" type="file" accept=".txt" hidden>
@@ -154,7 +156,7 @@ let timer = null;
 let lineTimer = null;
 let tempoTimer = null;
 
-let timing = 7;
+let timing = 25; // ✅ DEFAULT TIMING
 let fontSize = 1.25;
 let sourceName = "";
 let wakeLock = null;
@@ -164,7 +166,7 @@ const header = document.getElementById("header");
 const tempo = document.getElementById("tempo");
 
 /* =========================
-   CORE STATE SETTERS
+   CORE SETTERS
    ========================= */
 function setTiming(value) {
   timing = Math.max(1, value);
@@ -179,7 +181,8 @@ function setFontSize(value) {
 
 /* HEADER */
 function updateHeader() {
-  header.textContent = `${sourceName || "Texto"} | ⏱ ${timing}s`;
+  if (!sourceName) return;
+  header.textContent = `${sourceName} | ⏱ ${timing}s`;
 }
 
 /* WAKE LOCK */
@@ -206,7 +209,6 @@ function splitPages(text) {
   return out;
 }
 
-/* SKIPPABLE LINES */
 function isSkippable(line) {
   return !line.trim() || line.trim().startsWith("|");
 }
@@ -240,7 +242,6 @@ function startTempo() {
 }
 function stopTempo() { clearInterval(tempoTimer); }
 
-/* RESTART PLAY IF RUNNING */
 function restartPlaybackIfRunning() {
   if (timer) {
     pause.click();
@@ -287,12 +288,12 @@ pause.onclick = () => {
 prev.onclick = () => currentPage > 0 && (currentPage--, renderPage());
 next.onclick = () => currentPage < pages.length - 1 && (currentPage++, renderPage());
 
-/* TIMING BUTTONS */
+/* TIMING */
 timingPlus.onclick = () => setTiming(timing + 1);
 timingMinus.onclick = () => setTiming(timing - 1);
 timingBtn.onclick = () => restartPlaybackIfRunning();
 
-/* FONT SIZE BUTTONS */
+/* FONT */
 fontPlus.onclick = () => setFontSize(fontSize + 0.1);
 fontMinus.onclick = () => setFontSize(fontSize - 0.1);
 
@@ -322,7 +323,7 @@ linkBtn.onclick = async () => {
 };
 
 /* =========================
-   LOAD FROM URL PARAMETERS
+   URL PARAMETERS
    ========================= */
 (function loadFromURL() {
   const params = new URLSearchParams(window.location.search);
