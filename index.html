@@ -46,8 +46,12 @@ body {
   background: #111;
 }
 
+/* 👇 BOTONES CON ANCHOS REALES */
 .controls.top {
-  grid-template-columns: repeat(8, 1fr);
+  grid-template-columns:
+    1fr 1fr
+    1fr 0.5fr 0.5fr
+    1fr 0.5fr 0.5fr;
 }
 
 .controls.bottom {
@@ -94,16 +98,24 @@ button:disabled {
   white-space: pre-wrap;
 }
 
-.line { padding: 0.08em 0; }
-.highlight { background: rgba(30,136,229,0.28); }
+.line {
+  padding: 0.1em 0;
+}
 
+/* 👇 HIGHLIGHT MÁS CONTRASTANTE */
+.highlight {
+  background: rgba(255,255,255,0.18);
+  border-left: 4px solid #1e88e5;
+  padding-left: 0.6em;
+  box-shadow: 0 0 8px rgba(30,136,229,0.6);
+}
 </style>
 </head>
 
 <body>
 <div id="app">
 
-<div id="header">Use los botones de Carpeta y Link para cargar el texto</div>
+<div id="header">Para comenzar carga un URL o un archivo</div>
 
 <!-- TOP CONTROLS -->
 <div class="controls top">
@@ -111,8 +123,8 @@ button:disabled {
   <button id="linkBtn">🔗</button>
 
   <button id="timingBtn">⏱</button>
-  <button id="timingPlus">➕</button>
-  <button id="timingMinus">➖</button>
+  <button id="timingPlus">↑</button>
+  <button id="timingMinus">↓</button>
 
   <button id="fontBtn">🔤</button>
   <button id="fontPlus">➕</button>
@@ -145,7 +157,7 @@ let timer = null;
 let lineTimer = null;
 let tempoTimer = null;
 
-let timing = 16;
+let timing = 7;
 let fontSize = 1.25;
 let sourceName = "";
 let wakeLock = null;
@@ -178,8 +190,8 @@ fullscreen.onclick = () =>
 function splitPages(text) {
   const lines = text.split(/\r?\n+/);
   const out = [];
-  for (let i = 0; i < lines.length; i += 15)
-    out.push(lines.slice(i, i + 15));
+  for (let i = 0; i < lines.length; i += 12)
+    out.push(lines.slice(i, i + 12));
   return out;
 }
 
@@ -198,6 +210,14 @@ function startTempo() {
   }, 1000 / timing);
 }
 function stopTempo() { clearInterval(tempoTimer); }
+
+/* 👇 REINICIAR PLAY SI CAMBIA TIMING */
+function restartPlaybackIfRunning() {
+  if (timer) {
+    pause.click();
+    play.click();
+  }
+}
 
 /* PLAY */
 play.onclick = async () => {
@@ -236,9 +256,17 @@ pause.onclick = () => {
 prev.onclick = () => currentPage > 0 && (currentPage--, renderPage());
 next.onclick = () => currentPage < pages.length - 1 && (currentPage++, renderPage());
 
-/* TIMING + / - */
-timingPlus.onclick = () => { timing++; updateHeader(); };
-timingMinus.onclick = () => { if (timing > 1) timing--; updateHeader(); };
+/* TIMING + / - (EN VIVO) */
+timingPlus.onclick = () => {
+  timing++;
+  updateHeader();
+  restartPlaybackIfRunning();
+};
+timingMinus.onclick = () => {
+  if (timing > 1) timing--;
+  updateHeader();
+  restartPlaybackIfRunning();
+};
 
 /* FONT SIZE + / - */
 fontPlus.onclick = () => {
@@ -274,42 +302,7 @@ linkBtn.onclick = async () => {
   updateHeader();
   renderPage();
 };
-
-  /* URL PARAMETERS */
-(function loadFromURL() {
-  const params = new URLSearchParams(window.location.search);
-
-  const textURL = params.get("text");
-  const timingParam = params.get("timing");
-  const fontParam = params.get("font");
-
-  if (timingParam) {
-    timing = Math.max(1, parseInt(timingParam));
-    updateHeader();
-  }
-
-  if (fontParam) {
-    fontSize = Math.max(1,parseFloat(fontParam));
-    document.documentElement.style.setProperty(
-      "--font-size",
-      fontSize + "rem"
-    );
-  }
-
-  if (textURL) {
-    fetch(textURL)
-      .then(r => r.text())
-      .then(txt => {
-        sourceName = textURL.replace(/^https?:\/\//, "");
-        pages = splitPages(txt);
-        currentPage = 0;
-        updateHeader();
-        renderPage();
-      })
-      .catch(() => console.warn("No se pudo cargar texto desde URL"));
-  }
-})();
-
 </script>
+
 </body>
 </html>
