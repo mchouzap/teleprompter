@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>Chou's Teleprompter</title>
+<title>Teleprompter</title>
 
 <style>
 :root {
@@ -46,7 +46,6 @@ body {
   background: #111;
 }
 
-/* 👇 BOTONES CON ANCHOS REALES */
 .controls.top {
   grid-template-columns:
     1fr 1fr
@@ -98,11 +97,9 @@ button:disabled {
   white-space: pre-wrap;
 }
 
-.line {
-  padding: 0.1em 0;
-}
+.line { padding: 0.1em 0; }
 
-/* 👇 HIGHLIGHT MÁS CONTRASTANTE */
+/* HIGHLIGHT */
 .highlight {
   background: rgba(255,255,255,0.18);
   border-left: 4px solid #1e88e5;
@@ -115,7 +112,7 @@ button:disabled {
 <body>
 <div id="app">
 
-<div id="header">Para comenzar carga un URL o un archivo</div>
+<div id="header">Sin texto cargado</div>
 
 <!-- TOP CONTROLS -->
 <div class="controls top">
@@ -123,8 +120,8 @@ button:disabled {
   <button id="linkBtn">🔗</button>
 
   <button id="timingBtn">⏱</button>
-  <button id="timingPlus">↑</button>
-  <button id="timingMinus">↓</button>
+  <button id="timingPlus">➕</button>
+  <button id="timingMinus">➖</button>
 
   <button id="fontBtn">🔤</button>
   <button id="fontPlus">➕</button>
@@ -157,7 +154,7 @@ let timer = null;
 let lineTimer = null;
 let tempoTimer = null;
 
-let timing = 20;
+let timing = 7;
 let fontSize = 1.25;
 let sourceName = "";
 let wakeLock = null;
@@ -188,18 +185,42 @@ fullscreen.onclick = () =>
 
 /* PAGINATION */
 function splitPages(text) {
-  const lines = text.split(/\r?\n+/);
+  const lines = text.split(/\r?\n/);
   const out = [];
   for (let i = 0; i < lines.length; i += 12)
     out.push(lines.slice(i, i + 12));
   return out;
 }
 
+/* UTIL: ¿línea válida para detenerse? */
+function isSkippable(line) {
+  return !line.trim() || line.trim().startsWith("|");
+}
+
+/* RENDER */
 function renderPage() {
   currentLine = 0;
   textDiv.innerHTML = pages[currentPage]
-    .map((l, i) => `<div class="line ${i === 0 ? "highlight" : ""}">${l}</div>`)
+    .map(l => `<div class="line">${l}</div>`)
     .join("");
+
+  advanceToNextValidLine();
+}
+
+/* AVANZA HASTA LÍNEA VÁLIDA */
+function advanceToNextValidLine() {
+  const lines = document.querySelectorAll(".line");
+
+  while (
+    currentLine < lines.length &&
+    isSkippable(lines[currentLine].textContent)
+  ) {
+    currentLine++;
+  }
+
+  if (lines[currentLine]) {
+    lines[currentLine].classList.add("highlight");
+  }
 }
 
 /* TEMPO */
@@ -211,7 +232,7 @@ function startTempo() {
 }
 function stopTempo() { clearInterval(tempoTimer); }
 
-/* 👇 REINICIAR PLAY SI CAMBIA TIMING */
+/* RESTART SI CAMBIA TIMING */
 function restartPlaybackIfRunning() {
   if (timer) {
     pause.click();
@@ -226,15 +247,15 @@ play.onclick = async () => {
   await enableWakeLock();
   startTempo();
 
-  const lineDuration = (timing * 1000) / pages[currentPage].length;
+  const lines = document.querySelectorAll(".line");
+  const validLines = pages[currentPage].filter(l => !isSkippable(l)).length;
+  const lineDuration = (timing * 1000) / Math.max(1, validLines);
 
   lineTimer = setInterval(() => {
     const lines = document.querySelectorAll(".line");
-    if (currentLine < lines.length - 1) {
-      lines[currentLine].classList.remove("highlight");
-      currentLine++;
-      lines[currentLine].classList.add("highlight");
-    }
+    lines[currentLine]?.classList.remove("highlight");
+    currentLine++;
+    advanceToNextValidLine();
   }, lineDuration);
 
   timer = setInterval(() => {
@@ -256,19 +277,11 @@ pause.onclick = () => {
 prev.onclick = () => currentPage > 0 && (currentPage--, renderPage());
 next.onclick = () => currentPage < pages.length - 1 && (currentPage++, renderPage());
 
-/* TIMING + / - (EN VIVO) */
-timingPlus.onclick = () => {
-  timing++;
-  updateHeader();
-  restartPlaybackIfRunning();
-};
-timingMinus.onclick = () => {
-  if (timing > 1) timing--;
-  updateHeader();
-  restartPlaybackIfRunning();
-};
+/* TIMING */
+timingPlus.onclick = () => { timing++; updateHeader(); restartPlaybackIfRunning(); };
+timingMinus.onclick = () => { if (timing > 1) timing--; updateHeader(); restartPlaybackIfRunning(); };
 
-/* FONT SIZE + / - */
+/* FONT SIZE */
 fontPlus.onclick = () => {
   fontSize = Math.min(3, fontSize + 0.1);
   document.documentElement.style.setProperty("--font-size", fontSize + "rem");
@@ -303,6 +316,5 @@ linkBtn.onclick = async () => {
   renderPage();
 };
 </script>
-
 </body>
 </html>
