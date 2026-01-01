@@ -49,8 +49,8 @@ body {
 .controls.top {
   grid-template-columns:
     1fr 1fr
-    1fr 0.5fr 0.5fr
-    1fr 0.5fr 0.5fr;
+    0.5fr 0.5fr 0.5fr
+    0.5fr 0.5fr 0.5fr;
 }
 
 .controls.bottom {
@@ -196,8 +196,8 @@ function updateHeader() {
 function splitPages(text) {
   const lines = text.split(/\r?\n/);
   const out = [];
-  for (let i = 0; i < lines.length; i += 16)
-    out.push(lines.slice(i, i + 16));
+  for (let i = 0; i < lines.length; i += 12)
+    out.push(lines.slice(i, i + 12));
   return out;
 }
 
