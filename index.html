@@ -88,9 +88,7 @@ button:disabled {
   background: #555;
 }
 
-.pulse {
-  background: #1e88e5;
-}
+.pulse { background: #1e88e5; }
 
 #text {
   padding: 1vh 4vw;
@@ -99,13 +97,11 @@ button:disabled {
   white-space: pre-wrap;
 }
 
-.line {
-  padding: 0.12em 0;
-}
+.line { padding: 0.12em 0; }
 
 /* HIGHLIGHT */
 .highlight {
-  background: rgba(255,255,255,0.2);
+  background: rgba(255,255,255,0.22);
   border-left: 4px solid #1e88e5;
   padding-left: 0.6em;
   box-shadow: 0 0 10px rgba(30,136,229,0.7);
@@ -126,8 +122,8 @@ button:disabled {
   <button id="linkBtn">🔗</button>
 
   <button id="timingBtn">⏱</button>
-  <button id="timingPlus">➕</button>
-  <button id="timingMinus">➖</button>
+  <button id="timingPlus">↓</button>
+  <button id="timingMinus">↑</button>
 
   <button id="fontBtn">🔤</button>
   <button id="fontPlus">➕</button>
@@ -153,6 +149,9 @@ button:disabled {
 </div>
 
 <script>
+/* =========================
+   STATE
+   ========================= */
 let pages = [];
 let currentPage = 0;
 let currentLine = 0;
@@ -161,12 +160,14 @@ let timer = null;
 let lineTimer = null;
 let tempoTimer = null;
 
-let timing = 25;        // DEFAULT
+let timing = 25;     // DEFAULT REAL
 let fontSize = 1.25;
 let sourceName = "";
 let wakeLock = null;
 
-/* UTILITIES */
+/* =========================
+   UTILITIES
+   ========================= */
 function truncate(text, max = 32) {
   return text.length > max ? text.slice(0, max - 1) + "…" : text;
 }
@@ -186,22 +187,29 @@ function isPauseLine(line) {
   return line.trim().startsWith("##");
 }
 
-/* HEADER */
+/* =========================
+   HEADER
+   ========================= */
 function updateHeader() {
   if (!sourceName) return;
   header.textContent = `${truncate(sourceName)} | ⏱ ${timing}s`;
 }
 
-/* PAGINATION */
+/* =========================
+   PAGINATION
+   ========================= */
 function splitPages(text) {
   const lines = text.split(/\r?\n/);
   const out = [];
-  for (let i = 0; i < lines.length; i += 12)
+  for (let i = 0; i < lines.length; i += 12) {
     out.push(lines.slice(i, i + 12));
+  }
   return out;
 }
 
-/* RENDER */
+/* =========================
+   RENDER
+   ========================= */
 function renderPage() {
   currentLine = 0;
   text.innerHTML = pages[currentPage]
@@ -231,8 +239,11 @@ function advanceToNextValidLine() {
   }
 }
 
-/* TEMPO */
+/* =========================
+   TEMPO
+   ========================= */
 function startTempo() {
+  stopTempo();
   tempoTimer = setInterval(() => {
     tempo.classList.add("pulse");
     setTimeout(() => tempo.classList.remove("pulse"), 120);
@@ -243,7 +254,9 @@ function stopTempo() {
   clearInterval(tempoTimer);
 }
 
-/* WAKE LOCK */
+/* =========================
+   WAKE LOCK
+   ========================= */
 async function enableWakeLock() {
   try { wakeLock = await navigator.wakeLock.request("screen"); } catch {}
 }
@@ -252,7 +265,9 @@ function disableWakeLock() {
   wakeLock = null;
 }
 
-/* PLAYBACK */
+/* =========================
+   PLAYBACK
+   ========================= */
 function restartIfRunning() {
   if (timer) {
     pause.click();
@@ -294,16 +309,16 @@ pause.onclick = () => {
   pause.disabled = true;
 };
 
-/* NAV */
+/* =========================
+   CONTROLS
+   ========================= */
 prev.onclick = () => currentPage > 0 && (currentPage--, renderPage());
 next.onclick = () => currentPage < pages.length - 1 && (currentPage++, renderPage());
 
-/* TIMING */
 timingPlus.onclick = () => { timing++; updateHeader(); restartIfRunning(); };
 timingMinus.onclick = () => { timing = Math.max(1, timing - 1); updateHeader(); restartIfRunning(); };
 timingBtn.onclick = restartIfRunning;
 
-/* FONT */
 fontPlus.onclick = () => {
   fontSize = Math.min(3, fontSize + 0.1);
   document.documentElement.style.setProperty("--font-size", fontSize + "rem");
@@ -313,13 +328,14 @@ fontMinus.onclick = () => {
   document.documentElement.style.setProperty("--font-size", fontSize + "rem");
 };
 
-/* FULLSCREEN */
 fullscreen.onclick = () =>
   document.fullscreenElement
     ? document.exitFullscreen()
     : document.documentElement.requestFullscreen?.();
 
-/* FILE */
+/* =========================
+   INPUTS
+   ========================= */
 folder.onclick = () => fileInput.click();
 fileInput.onchange = async () => {
   const file = fileInput.files[0];
@@ -331,7 +347,6 @@ fileInput.onchange = async () => {
   renderPage();
 };
 
-/* LINK */
 linkBtn.onclick = async () => {
   const url = prompt("Pega URL .txt");
   if (!url) return;
@@ -343,21 +358,28 @@ linkBtn.onclick = async () => {
   renderPage();
 };
 
-/* URL PARAMS */
+/* =========================
+   URL PARAMETERS (FIXED)
+   ========================= */
 (function loadFromURL() {
   const p = new URLSearchParams(location.search);
 
-  if (p.get("timing")) timing = parseInt(p.get("timing"));
-  if (p.get("font")) {
+  if (p.has("timing")) {
+    timing = Math.max(1, parseInt(p.get("timing")));
+  }
+
+  if (p.has("font")) {
     fontSize = parseFloat(p.get("font"));
     document.documentElement.style.setProperty("--font-size", fontSize + "rem");
   }
-  if (p.get("text")) {
+
+  if (p.has("text")) {
     fetch(p.get("text"))
       .then(r => r.text())
       .then(txt => {
         sourceName = p.get("text").replace(/^https?:\/\//, "");
         pages = splitPages(txt);
+        currentPage = 0;
         updateHeader();
         renderPage();
       });
