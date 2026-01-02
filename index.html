@@ -6,295 +6,339 @@
 <title>Chou's Teleprompter</title>
 
 <style>
-:root { --font-size: 1.25rem; }
-*{box-sizing:border-box}
-
+:root{
+  --font-size: 1.6rem;
+}
 body{
-  margin:0;background:#000;color:#fff;
-  font-family:system-ui,sans-serif;
-  height:100dvh;overflow:hidden;
+  margin:0;
+  background:#000;
+  color:#fff;
+  font-family: system-ui, sans-serif;
+  display:flex;
+  flex-direction:column;
+  height:100vh;
+  overflow:hidden;
 }
 
-#app{display:flex;flex-direction:column;height:100%}
-
-#header{
-  background:#111;padding:6px 10px;
-  font-size:.85rem;white-space:nowrap;
-  overflow:hidden;text-overflow:ellipsis;
+header{
+  padding:8px 12px;
+  font-size:0.9rem;
+  background:#111;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
 }
 
-.controls{display:grid;gap:6px;padding:6px;background:#111}
-
-.controls.top{
-  grid-template-columns:
-    1fr 1fr
-    0.5fr .4fr .4fr
-    0.5fr .4fr .4fr
-    0.5fr;
+#viewer{
+  flex:1;
+  padding:12px;
+  font-size:var(--font-size);
+  line-height:1.4;
+  overflow:hidden;
 }
 
-.controls.bottom{grid-template-columns:repeat(5,1fr)}
+.line{
+  opacity:.5;
+}
+.active{
+  opacity:1;
+  background:#fff;
+  color:#000;
+}
+
+.controls{
+  background:#111;
+  padding:6px;
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+}
+
+.row{
+  display:flex;
+  gap:4px;
+}
+
+input[type="text"], input[type="number"]{
+  flex:1;
+  height:36px;
+}
 
 button{
-  height:32px;border:none;border-radius:6px;
-  background:#1e88e5;color:#fff;font-size:1rem;
+  height:36px;
+  min-width:36px;
+  background:#222;
+  color:#fff;
+  border:none;
+  font-size:1rem;
 }
-button:disabled{background:#333;color:#777}
-
-#textWrapper{flex:1;position:relative;overflow:hidden}
-
-#tempo{
-  position:absolute;top:6px;right:10px;
-  width:8px;height:8px;border-radius:50%;
-  background:#555;
-}
-.pulse{background:#1e88e5}
-
-#text{
-  padding:1vh 4vw;
-  font-size:var(--font-size);
-  line-height:1.55;
-  white-space:pre-wrap;
+button:disabled{
+  opacity:.4;
 }
 
-.line{padding:.12em 0}
-.highlight{
-  background:rgba(255,255,255,.35);
-  border-left:4px solid #1e88e5;
-  padding-left:.6em;
-}
+.small{ flex:.5 }
 </style>
 </head>
 
 <body>
-<div id="app">
 
-<div id="header">
+<header id="header">
 Para comenzar agrega un texto vía URL o carga el archivo *.txt
-</div>
+</header>
 
-<div class="controls top">
-  <button id="folder">📁</button>
-  <button id="linkBtn">🔗</button>
+<div id="viewer"></div>
 
-  <button id="timingBtn">⏱</button>
-  <button id="timingUp">⬆️</button>
-  <button id="timingDown">⬇️</button>
+<div class="controls">
 
-  <button id="fontBtn">🔤</button>
-  <button id="fontPlus">➕</button>
-  <button id="fontMinus">➖</button>
+  <!-- INPUTS -->
+  <div class="row">
+    <input id="textUrl" type="text" placeholder="URL de texto (.txt)">
+    <button id="loadUrl">🔗</button>
+    <input id="fileInput" type="file" accept=".txt" hidden>
+    <button id="loadFile">📂</button>
+  </div>
 
-  <button disabled>📄</button>
-</div>
+  <!-- TIMING / FONT / LINES -->
+  <div class="row">
+    <button id="timingSet">⏱</button>
+    <button id="timingUp" class="small">⬆</button>
+    <button id="timingDown" class="small">⬇</button>
 
-<div class="controls bottom">
-  <button id="play">▶</button>
-  <button id="pause" disabled>⏸</button>
-  <button id="prev">⏮</button>
-  <button id="next">⏭</button>
-  <button id="fullscreen">⤢</button>
-</div>
+    <button id="fontSet">A</button>
+    <button id="fontUp" class="small">＋</button>
+    <button id="fontDown" class="small">－</button>
 
-<div id="textWrapper">
-  <div id="tempo"></div>
-  <div id="text">Chou’s Teleprompter</div>
-</div>
+    <button id="linesSet">≡</button>
+  </div>
 
-<input id="fileInput" type="file" accept=".txt" hidden>
+  <!-- PLAYBACK -->
+  <div class="row">
+    <button id="play">▶</button>
+    <button id="pause" disabled>⏸</button>
+    <button id="back">⏮</button>
+    <button id="forward">⏭</button>
+    <button id="fullscreen">⛶</button>
+  </div>
+
 </div>
 
 <script>
-document.addEventListener("DOMContentLoaded", () => {
+/* =======================
+   STATE (single source)
+======================= */
+const state = {
+  timing: 25,
+  fontSize: 1.6,
+  linesToShow: 15,
+  lines: [],
+  index: 0,
+  running: false,
+  timer: null,
+  wakeLock: null
+};
 
-  /* ========= STATE ========= */
-  const state = {
-    timing: 25,
-    fontSize: 1.25,
-    linesPerPage: 15,
-    playing: false
-  };
+/* =======================
+   ELEMENTS
+======================= */
+const viewer = document.getElementById("viewer");
+const header = document.getElementById("header");
 
-  let pages=[], currentPage=0, currentLine=0;
-  let pageTimer=null, lineTimer=null, tempoTimer=null;
-  let sourceName="", wakeLock=null;
+/* =======================
+   URL PARAMS (INIT ONLY)
+======================= */
+(function loadFromURL(){
+  const p = new URLSearchParams(location.search);
 
-  /* ========= DOM ========= */
-  const $ = id => document.getElementById(id);
+  if(p.get("timing")) state.timing = parseInt(p.get("timing")) || state.timing;
+  if(p.get("font")) state.fontSize = parseFloat(p.get("font")) || state.fontSize;
+  if(p.get("lines")) state.linesToShow = parseInt(p.get("lines")) || state.linesToShow;
 
-  const header = $("header");
-  const textEl = $("text");
-  const tempo = $("tempo");
-
-  const playBtn = $("play");
-  const pauseBtn = $("pause");
-
-  /* ========= HELPERS ========= */
-  const truncate=(t,m=32)=>t.length>m?t.slice(0,m-1)+"…":t;
-  const isSkippable=l=>{
-    const t=l.trim();
-    return !t||t.startsWith("||")||t.startsWith("//")||t.startsWith("/*");
-  };
-  const isPauseLine=l=>l.trim().startsWith("##");
-
-  /* ========= WAKE LOCK ========= */
-  async function lockScreen(){
-    try{ wakeLock=await navigator.wakeLock.request("screen"); }catch{}
-  }
-  function unlockScreen(){
-    wakeLock?.release(); wakeLock=null;
+  if(p.get("text")){
+    document.getElementById("textUrl").value = p.get("text");
+    loadTextFromURL(p.get("text"));
   }
 
-  /* ========= UI SYNC ========= */
-  function syncUI(){
-    document.documentElement.style
-      .setProperty("--font-size", state.fontSize+"rem");
+  applyVisuals();
+})();
 
-    if(sourceName){
-      header.textContent =
-        `${truncate(sourceName)} | ⏱ ${state.timing}s | 📄 ${state.linesPerPage}`;
+/* =======================
+   TEXT LOADING
+======================= */
+function loadTextFromURL(url){
+  fetch(url)
+    .then(r=>r.text())
+    .then(t=>{
+      setLines(t, url);
+    })
+    .catch(()=>alert("Error cargando texto"));
+}
+
+document.getElementById("loadUrl").onclick=()=>{
+  const url = document.getElementById("textUrl").value.trim();
+  if(url) loadTextFromURL(url);
+};
+
+document.getElementById("loadFile").onclick=()=>{
+  document.getElementById("fileInput").click();
+};
+
+document.getElementById("fileInput").onchange=e=>{
+  const f = e.target.files[0];
+  if(!f) return;
+  f.text().then(t=>setLines(t,f.name));
+};
+
+function setLines(text, label){
+  state.lines = text.split(/\r?\n/);
+  state.index = 0;
+  updateHeader(label);
+  render();
+}
+
+/* =======================
+   RENDER
+======================= */
+function render(){
+  const start = Math.max(0, state.index);
+  const slice = state.lines.slice(start, start + state.linesToShow);
+
+  viewer.innerHTML = slice.map((l,i)=>{
+    const cls = i===0 ? "line active" : "line";
+    return `<div class="${cls}">${l}</div>`;
+  }).join("");
+}
+
+/* =======================
+   PLAYBACK LOGIC
+======================= */
+function nextLine(){
+  let next = state.index + 1;
+  while(next < state.lines.length){
+    const l = state.lines[next].trim();
+    if(
+      l==="" ||
+      l.startsWith("||") ||
+      l.startsWith("//") ||
+      l.startsWith("/*")
+    ){
+      next++;
+      continue;
     }
-  }
-
-  /* ========= PAGINATION ========= */
-  function splitPages(txt){
-    const l=txt.split(/\r?\n/), out=[];
-    for(let i=0;i<l.length;i+=state.linesPerPage){
-      out.push(l.slice(i,i+state.linesPerPage));
+    if(l.startsWith("##")){
+      pause();
+      return;
     }
-    return out;
+    break;
   }
+  state.index = next;
+  render();
+}
 
-  /* ========= RENDER ========= */
-  function renderPage(){
-    currentLine=0;
-    textEl.innerHTML = pages[currentPage]
-      .map(l=>`<div class="line">${l}</div>`).join("");
-    advanceLine();
+function play(){
+  if(state.running) return;
+  state.running = true;
+  document.getElementById("play").disabled = true;
+  document.getElementById("pause").disabled = false;
+  requestWakeLock();
+  state.timer = setInterval(nextLine, state.timing * 1000);
+}
+
+function pause(){
+  state.running = false;
+  clearInterval(state.timer);
+  releaseWakeLock();
+  document.getElementById("play").disabled = false;
+  document.getElementById("pause").disabled = true;
+}
+
+/* =======================
+   BUTTONS
+======================= */
+document.getElementById("play").onclick=play;
+document.getElementById("pause").onclick=pause;
+document.getElementById("back").onclick=()=>{state.index=Math.max(0,state.index-1);render()};
+document.getElementById("forward").onclick=()=>{state.index++;render()};
+
+document.getElementById("timingUp").onclick=()=>setTiming(state.timing+1);
+document.getElementById("timingDown").onclick=()=>setTiming(state.timing-1);
+
+document.getElementById("fontUp").onclick=()=>setFont(state.fontSize+.1);
+document.getElementById("fontDown").onclick=()=>setFont(state.fontSize-.1);
+
+document.getElementById("timingSet").onclick=()=>{
+  const v = prompt("Timing en segundos", state.timing);
+  if(v) setTiming(parseInt(v));
+};
+
+document.getElementById("fontSet").onclick=()=>{
+  const v = prompt("Tamaño de fuente", state.fontSize);
+  if(v) setFont(parseFloat(v));
+};
+
+document.getElementById("linesSet").onclick=()=>{
+  const v = prompt("Líneas a mostrar", state.linesToShow);
+  if(v) setLinesCount(parseInt(v));
+};
+
+document.getElementById("fullscreen").onclick=()=>{
+  if(!document.fullscreenElement) document.documentElement.requestFullscreen();
+  else document.exitFullscreen();
+};
+
+/* =======================
+   SETTERS
+======================= */
+function setTiming(v){
+  if(v<1) return;
+  state.timing = v;
+  updateHeader();
+  if(state.running){
+    clearInterval(state.timer);
+    state.timer = setInterval(nextLine, state.timing * 1000);
   }
+}
 
-  function advanceLine(){
-    const lines=document.querySelectorAll(".line");
-    while(currentLine<lines.length){
-      const t=lines[currentLine].textContent;
-      if(isPauseLine(t)){ pause(); return; }
-      if(!isSkippable(t)){
-        lines[currentLine].classList.add("highlight");
-        return;
-      }
-      currentLine++;
-    }
+function setFont(v){
+  if(v<0.5) return;
+  state.fontSize = v;
+  applyVisuals();
+}
+
+function setLinesCount(v){
+  if(v<1) return;
+  state.linesToShow = v;
+  render();
+}
+
+/* =======================
+   VISUAL / HEADER
+======================= */
+function applyVisuals(){
+  document.documentElement.style.setProperty("--font-size", state.fontSize+"rem");
+  updateHeader();
+}
+
+function updateHeader(label){
+  let title = label || header.textContent;
+  title = title.substring(0,32);
+  header.textContent = `${title} | ${state.timing}s`;
+}
+
+/* =======================
+   WAKE LOCK
+======================= */
+async function requestWakeLock(){
+  try{
+    state.wakeLock = await navigator.wakeLock.request("screen");
+  }catch(e){}
+}
+function releaseWakeLock(){
+  if(state.wakeLock){
+    state.wakeLock.release();
+    state.wakeLock=null;
   }
-
-  /* ========= TEMPO ========= */
-  function startTempo(){
-    stopTempo();
-    tempoTimer=setInterval(()=>{
-      tempo.classList.add("pulse");
-      setTimeout(()=>tempo.classList.remove("pulse"),120);
-    },1000/state.timing);
-  }
-  function stopTempo(){ clearInterval(tempoTimer); }
-
-  /* ========= PLAYBACK ========= */
-  function play(){
-    if(state.playing||!pages.length) return;
-    state.playing=true;
-    pauseBtn.disabled=false;
-    lockScreen();
-    startTempo();
-
-    const valid=pages[currentPage].filter(l=>!isSkippable(l)).length||1;
-    const perLine=(state.timing*1000)/valid;
-
-    lineTimer=setInterval(()=>{
-      const lines=document.querySelectorAll(".line");
-      lines[currentLine]?.classList.remove("highlight");
-      currentLine++; advanceLine();
-    },perLine);
-
-    pageTimer=setInterval(()=>{
-      currentPage++;
-      if(currentPage>=pages.length){ pause(); return; }
-      renderPage();
-    },state.timing*1000);
-  }
-
-  function pause(){
-    state.playing=false;
-    clearInterval(pageTimer);
-    clearInterval(lineTimer);
-    stopTempo();
-    unlockScreen();
-    pauseBtn.disabled=true;
-  }
-
-  function restart(){
-    if(state.playing){ pause(); play(); }
-  }
-
-  /* ========= CONTROLS ========= */
-  playBtn.addEventListener("click", play);
-  pauseBtn.addEventListener("click", pause);
-
-  $("timingUp").addEventListener("click", ()=>{
-    state.timing++; syncUI(); restart();
-  });
-  $("timingDown").addEventListener("click", ()=>{
-    state.timing=Math.max(1,state.timing-1); syncUI(); restart();
-  });
-
-  $("fontPlus").addEventListener("click", ()=>{
-    state.fontSize+=0.1; syncUI();
-  });
-  $("fontMinus").addEventListener("click", ()=>{
-    state.fontSize=Math.max(.8,state.fontSize-.1); syncUI();
-  });
-
-  $("fullscreen").addEventListener("click", ()=>{
-    document.fullscreenElement
-      ? document.exitFullscreen()
-      : document.documentElement.requestFullscreen();
-  });
-
-  $("folder").addEventListener("click", ()=>$("fileInput").click());
-
-  $("fileInput").addEventListener("change", async e=>{
-    const txt = await e.target.files[0].text();
-    sourceName = e.target.files[0].name;
-    pages = splitPages(txt);
-    currentPage=0;
-    syncUI(); renderPage();
-  });
-
-  $("linkBtn").addEventListener("click", async ()=>{
-    const url = prompt("Pega URL .txt");
-    if(!url) return;
-    const txt = await (await fetch(url)).text();
-    sourceName = url.replace(/^https?:\/\//,"");
-    pages = splitPages(txt);
-    currentPage=0;
-    syncUI(); renderPage();
-  });
-
-  /* ========= URL PARAMS ========= */
-  const p=new URLSearchParams(location.search);
-  if(p.has("timing")) state.timing=+p.get("timing");
-  if(p.has("font")) state.fontSize=+p.get("font");
-  if(p.has("lines")) state.linesPerPage=+p.get("lines");
-
-  if(p.has("text")){
-    fetch(p.get("text"))
-      .then(r=>r.text())
-      .then(txt=>{
-        sourceName=p.get("text").replace(/^https?:\/\//,"");
-        pages=splitPages(txt);
-        syncUI(); renderPage();
-      });
-  } else {
-    syncUI();
-  }
-});
+}
 </script>
+
 </body>
 </html>
