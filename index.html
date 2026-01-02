@@ -9,46 +9,37 @@
 :root{
   --font-size: 1.6rem;
 }
+
 body{
   margin:0;
   background:#000;
   color:#fff;
   font-family: system-ui, sans-serif;
-  display:flex;
-  flex-direction:column;
   height:100vh;
   overflow:hidden;
+  display:flex;
+  flex-direction:column;
 }
 
 header{
-  padding:8px 12px;
-  font-size:0.9rem;
+  padding:6px 10px;
   background:#111;
+  font-size:.85rem;
   white-space:nowrap;
   overflow:hidden;
   text-overflow:ellipsis;
 }
 
-#viewer{
-  flex:1;
-  padding:12px;
-  font-size:var(--font-size);
-  line-height:1.4;
-  overflow:hidden;
-}
-
-.line{
-  opacity:.5;
-}
-.active{
-  opacity:1;
-  background:#fff;
-  color:#000;
-}
-
-.controls{
-  background:#111;
+/* ===== FRAME DE CONTROLES ===== */
+#controls-frame{
   padding:6px;
+  background:#111;
+}
+
+/* puedes cambiar SOLO este ancho */
+.controls{
+  max-width:520px;
+  margin:0 auto;
   display:flex;
   flex-direction:column;
   gap:6px;
@@ -59,24 +50,37 @@ header{
   gap:4px;
 }
 
-input[type="text"], input[type="number"]{
-  flex:1;
-  height:36px;
-}
-
-button{
-  height:36px;
-  min-width:36px;
+button,input{
+  height:34px;
   background:#222;
   color:#fff;
   border:none;
-  font-size:1rem;
+  font-size:.95rem;
 }
-button:disabled{
-  opacity:.4;
+
+input{
+  flex:1;
 }
 
 .small{ flex:.5 }
+
+button:disabled{ opacity:.4 }
+
+/* ===== VISOR ===== */
+#viewer{
+  flex:1;
+  padding:12px;
+  font-size:var(--font-size);
+  line-height:1.4;
+  overflow:hidden;
+}
+
+.line{ opacity:.45 }
+.active{
+  opacity:1;
+  background:#fff;
+  color:#000;
+}
 </style>
 </head>
 
@@ -86,257 +90,203 @@ button:disabled{
 Para comenzar agrega un texto vía URL o carga el archivo *.txt
 </header>
 
-<div id="viewer"></div>
+<!-- CONTROLES ARRIBA -->
+<div id="controls-frame">
+  <div class="controls">
 
-<div class="controls">
+    <div class="row">
+      <input id="textUrl" placeholder="URL texto (.txt)">
+      <button id="loadUrl">🔗</button>
+      <input id="fileInput" type="file" accept=".txt" hidden>
+      <button id="loadFile">📂</button>
+    </div>
 
-  <!-- INPUTS -->
-  <div class="row">
-    <input id="textUrl" type="text" placeholder="URL de texto (.txt)">
-    <button id="loadUrl">🔗</button>
-    <input id="fileInput" type="file" accept=".txt" hidden>
-    <button id="loadFile">📂</button>
+    <div class="row">
+      <button id="timingSet" class="small">⏱</button>
+      <button id="timingUp" class="small">⬆</button>
+      <button id="timingDown" class="small">⬇</button>
+
+      <button id="fontSet" class="small">A</button>
+      <button id="fontUp" class="small">＋</button>
+      <button id="fontDown" class="small">－</button>
+
+      <button id="linesSet">≡</button>
+    </div>
+
+    <div class="row">
+      <button id="play">▶</button>
+      <button id="pause" disabled>⏸</button>
+      <button id="back">⏮</button>
+      <button id="forward">⏭</button>
+      <button id="fullscreen">⛶</button>
+    </div>
+
   </div>
-
-  <!-- TIMING / FONT / LINES -->
-  <div class="row">
-    <button id="timingSet">⏱</button>
-    <button id="timingUp" class="small">⬆</button>
-    <button id="timingDown" class="small">⬇</button>
-
-    <button id="fontSet">A</button>
-    <button id="fontUp" class="small">＋</button>
-    <button id="fontDown" class="small">－</button>
-
-    <button id="linesSet">≡</button>
-  </div>
-
-  <!-- PLAYBACK -->
-  <div class="row">
-    <button id="play">▶</button>
-    <button id="pause" disabled>⏸</button>
-    <button id="back">⏮</button>
-    <button id="forward">⏭</button>
-    <button id="fullscreen">⛶</button>
-  </div>
-
 </div>
 
+<div id="viewer"></div>
+
 <script>
-/* =======================
-   STATE (single source)
-======================= */
-const state = {
-  timing: 25,
-  fontSize: 1.6,
-  linesToShow: 15,
-  lines: [],
-  index: 0,
-  running: false,
-  timer: null,
-  wakeLock: null
+/* ================= STATE ================= */
+const state={
+  timing:25,
+  fontSize:1.6,
+  linesToShow:15,
+  lines:[],
+  index:0,
+  running:false,
+  timer:null,
+  wakeLock:null
 };
 
-/* =======================
-   ELEMENTS
-======================= */
-const viewer = document.getElementById("viewer");
-const header = document.getElementById("header");
-
-/* =======================
-   URL PARAMS (INIT ONLY)
-======================= */
-(function loadFromURL(){
-  const p = new URLSearchParams(location.search);
-
-  if(p.get("timing")) state.timing = parseInt(p.get("timing")) || state.timing;
-  if(p.get("font")) state.fontSize = parseFloat(p.get("font")) || state.fontSize;
-  if(p.get("lines")) state.linesToShow = parseInt(p.get("lines")) || state.linesToShow;
-
+/* ================= INIT FROM URL ================= */
+(function(){
+  const p=new URLSearchParams(location.search);
+  if(p.get("timing")) state.timing=parseInt(p.get("timing"))||state.timing;
+  if(p.get("font")) state.fontSize=parseFloat(p.get("font"))||state.fontSize;
+  if(p.get("lines")) state.linesToShow=parseInt(p.get("lines"))||state.linesToShow;
   if(p.get("text")){
-    document.getElementById("textUrl").value = p.get("text");
-    loadTextFromURL(p.get("text"));
+    document.getElementById("textUrl").value=p.get("text");
+    loadFromURL(p.get("text"));
   }
-
   applyVisuals();
 })();
 
-/* =======================
-   TEXT LOADING
-======================= */
-function loadTextFromURL(url){
-  fetch(url)
-    .then(r=>r.text())
-    .then(t=>{
-      setLines(t, url);
-    })
-    .catch(()=>alert("Error cargando texto"));
+/* ================= TEXT LOAD ================= */
+function loadFromURL(url){
+  fetch(url).then(r=>r.text()).then(t=>setText(t,url));
 }
-
 document.getElementById("loadUrl").onclick=()=>{
-  const url = document.getElementById("textUrl").value.trim();
-  if(url) loadTextFromURL(url);
+  const u=textUrl.value.trim();
+  if(u) loadFromURL(u);
+};
+document.getElementById("loadFile").onclick=()=>fileInput.click();
+fileInput.onchange=e=>{
+  const f=e.target.files[0];
+  if(f) f.text().then(t=>setText(t,f.name));
 };
 
-document.getElementById("loadFile").onclick=()=>{
-  document.getElementById("fileInput").click();
-};
-
-document.getElementById("fileInput").onchange=e=>{
-  const f = e.target.files[0];
-  if(!f) return;
-  f.text().then(t=>setLines(t,f.name));
-};
-
-function setLines(text, label){
-  state.lines = text.split(/\r?\n/);
-  state.index = 0;
+function setText(text,label){
+  state.lines=text.split(/\r?\n/);
+  state.index=0;
   updateHeader(label);
   render();
 }
 
-/* =======================
-   RENDER
-======================= */
+/* ================= RENDER ================= */
 function render(){
-  const start = Math.max(0, state.index);
-  const slice = state.lines.slice(start, start + state.linesToShow);
-
-  viewer.innerHTML = slice.map((l,i)=>{
-    const cls = i===0 ? "line active" : "line";
-    return `<div class="${cls}">${l}</div>`;
+  const slice=state.lines.slice(state.index,state.index+state.linesToShow);
+  viewer.innerHTML=slice.map((l,i)=>{
+    return `<div class="line ${i===0?'active':''}">${l}</div>`;
   }).join("");
 }
 
-/* =======================
-   PLAYBACK LOGIC
-======================= */
+/* ================= PLAYBACK ================= */
 function nextLine(){
-  let next = state.index + 1;
-  while(next < state.lines.length){
-    const l = state.lines[next].trim();
-    if(
-      l==="" ||
-      l.startsWith("||") ||
-      l.startsWith("//") ||
-      l.startsWith("/*")
-    ){
-      next++;
-      continue;
+  let next=state.index+1;
+  let pauseAfter=false;
+
+  while(next<state.lines.length){
+    const l=state.lines[next].trim();
+    if(l===""||l.startsWith("||")||l.startsWith("//")||l.startsWith("/*")){
+      next++; continue;
     }
-    if(l.startsWith("##")){
-      pause();
-      return;
-    }
+    if(l.startsWith("##")) pauseAfter=true;
     break;
   }
-  state.index = next;
+
+  state.index=next;
   render();
+
+  if(pauseAfter){
+    setTimeout(pause, 50); // deja que se vea el highlight
+  }
 }
 
 function play(){
   if(state.running) return;
-  state.running = true;
-  document.getElementById("play").disabled = true;
-  document.getElementById("pause").disabled = false;
+  state.running=true;
+  playBtn.disabled=true;
+  pauseBtn.disabled=false;
   requestWakeLock();
-  state.timer = setInterval(nextLine, state.timing * 1000);
+  state.timer=setInterval(nextLine,state.timing*1000);
 }
-
 function pause(){
-  state.running = false;
+  state.running=false;
   clearInterval(state.timer);
+  playBtn.disabled=false;
+  pauseBtn.disabled=true;
   releaseWakeLock();
-  document.getElementById("play").disabled = false;
-  document.getElementById("pause").disabled = true;
 }
 
-/* =======================
-   BUTTONS
-======================= */
-document.getElementById("play").onclick=play;
-document.getElementById("pause").onclick=pause;
-document.getElementById("back").onclick=()=>{state.index=Math.max(0,state.index-1);render()};
-document.getElementById("forward").onclick=()=>{state.index++;render()};
+/* ================= CONTROLS ================= */
+play.onclick=play;
+pause.onclick=pause;
+back.onclick=()=>{state.index=Math.max(0,state.index-1);render()};
+forward.onclick=()=>{state.index++;render()};
 
-document.getElementById("timingUp").onclick=()=>setTiming(state.timing+1);
-document.getElementById("timingDown").onclick=()=>setTiming(state.timing-1);
+timingUp.onclick=()=>setTiming(state.timing+1);
+timingDown.onclick=()=>setTiming(state.timing-1);
 
-document.getElementById("fontUp").onclick=()=>setFont(state.fontSize+.1);
-document.getElementById("fontDown").onclick=()=>setFont(state.fontSize-.1);
+fontUp.onclick=()=>setFont(state.fontSize+.1);
+fontDown.onclick=()=>setFont(state.fontSize-.1);
 
-document.getElementById("timingSet").onclick=()=>{
-  const v = prompt("Timing en segundos", state.timing);
+timingSet.onclick=()=>{
+  const v=prompt("Timing (s)",state.timing);
   if(v) setTiming(parseInt(v));
 };
-
-document.getElementById("fontSet").onclick=()=>{
-  const v = prompt("Tamaño de fuente", state.fontSize);
+fontSet.onclick=()=>{
+  const v=prompt("Fuente",state.fontSize);
   if(v) setFont(parseFloat(v));
 };
-
-document.getElementById("linesSet").onclick=()=>{
-  const v = prompt("Líneas a mostrar", state.linesToShow);
-  if(v) setLinesCount(parseInt(v));
+linesSet.onclick=()=>{
+  const v=prompt("Líneas",state.linesToShow);
+  if(v) setLines(parseInt(v));
 };
 
-document.getElementById("fullscreen").onclick=()=>{
-  if(!document.fullscreenElement) document.documentElement.requestFullscreen();
-  else document.exitFullscreen();
+fullscreen.onclick=()=>{
+  document.fullscreenElement?
+    document.exitFullscreen():
+    document.documentElement.requestFullscreen();
 };
 
-/* =======================
-   SETTERS
-======================= */
+/* ================= SETTERS ================= */
 function setTiming(v){
   if(v<1) return;
-  state.timing = v;
+  state.timing=v;
   updateHeader();
   if(state.running){
     clearInterval(state.timer);
-    state.timer = setInterval(nextLine, state.timing * 1000);
+    state.timer=setInterval(nextLine,state.timing*1000);
   }
 }
-
 function setFont(v){
-  if(v<0.5) return;
-  state.fontSize = v;
+  if(v<.5) return;
+  state.fontSize=v;
   applyVisuals();
 }
-
-function setLinesCount(v){
+function setLines(v){
   if(v<1) return;
-  state.linesToShow = v;
+  state.linesToShow=v;
   render();
 }
 
-/* =======================
-   VISUAL / HEADER
-======================= */
+/* ================= VISUAL ================= */
 function applyVisuals(){
-  document.documentElement.style.setProperty("--font-size", state.fontSize+"rem");
+  document.documentElement.style.setProperty("--font-size",state.fontSize+"rem");
   updateHeader();
 }
-
 function updateHeader(label){
-  let title = label || header.textContent;
-  title = title.substring(0,32);
-  header.textContent = `${title} | ${state.timing}s`;
+  const t=(label||header.textContent).substring(0,32);
+  header.textContent=`${t} | ${state.timing}s`;
 }
 
-/* =======================
-   WAKE LOCK
-======================= */
+/* ================= WAKE LOCK ================= */
 async function requestWakeLock(){
-  try{
-    state.wakeLock = await navigator.wakeLock.request("screen");
-  }catch(e){}
+  try{state.wakeLock=await navigator.wakeLock.request("screen");}catch(e){}
 }
 function releaseWakeLock(){
-  if(state.wakeLock){
-    state.wakeLock.release();
-    state.wakeLock=null;
-  }
+  if(state.wakeLock){state.wakeLock.release();state.wakeLock=null;}
 }
 </script>
 
