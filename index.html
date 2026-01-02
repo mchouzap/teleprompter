@@ -6,78 +6,46 @@
 <title>Chou's Teleprompter</title>
 
 <style>
-:root {
-  --font-size: 1.25rem;
-  --btn-h: 32px;
-}
+:root { --font-size: 1.25rem; }
 *{box-sizing:border-box}
 
 body{
-  margin:0;
-  background:#000;
-  color:#fff;
+  margin:0;background:#000;color:#fff;
   font-family:system-ui,sans-serif;
-  height:100dvh;
-  overflow:hidden;
+  height:100dvh;overflow:hidden;
 }
 
 #app{display:flex;flex-direction:column;height:100%}
 
 #header{
-  background:#111;
-  padding:6px 10px;
-  font-size:.85rem;
-  white-space:nowrap;
-  overflow:hidden;
-  text-overflow:ellipsis;
+  background:#111;padding:6px 10px;
+  font-size:.85rem;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;
 }
 
-.controls{
-  display:grid;
-  gap:6px;
-  padding:6px;
-  background:#111;
-}
+.controls{display:grid;gap:6px;padding:6px;background:#111}
 
 .controls.top{
   grid-template-columns:
     1fr 1fr
-    1fr .5fr .5fr
-    1fr .5fr .5fr
-    1fr;
+    .5fr .5fr .5fr
+    .5fr .5fr .5fr
+    .5fr;
 }
 
-.controls.bottom{
-  grid-template-columns:repeat(5,1fr);
-}
+.controls.bottom{grid-template-columns:repeat(5,1fr)}
 
 button{
-  height:var(--btn-h);
-  border:none;
-  border-radius:6px;
-  background:#1e88e5;
-  color:#fff;
-  font-size:1rem;
+  height:32px;border:none;border-radius:6px;
+  background:#1e88e5;color:#fff;font-size:1rem;
 }
+button:disabled{background:#333;color:#777}
 
-button:disabled{
-  background:#333;
-  color:#777;
-}
-
-#textWrapper{
-  flex:1;
-  position:relative;
-  overflow:hidden;
-}
+#textWrapper{flex:1;position:relative;overflow:hidden}
 
 #tempo{
-  position:absolute;
-  top:6px;
-  right:10px;
-  width:8px;
-  height:8px;
-  border-radius:50%;
+  position:absolute;top:6px;right:10px;
+  width:8px;height:8px;border-radius:50%;
   background:#555;
 }
 .pulse{background:#1e88e5}
@@ -90,12 +58,10 @@ button:disabled{
 }
 
 .line{padding:.12em 0}
-
 .highlight{
-  background:rgba(255,255,255,.3);
+  background:rgba(255,255,255,.35);
   border-left:4px solid #1e88e5;
   padding-left:.6em;
-  box-shadow:0 0 14px rgba(30,136,229,.9);
 }
 </style>
 </head>
@@ -103,9 +69,7 @@ button:disabled{
 <body>
 <div id="app">
 
-<div id="header">
-Para comenzar agrega un texto vía URL o carga el archivo *.txt
-</div>
+<div id="header">Para comenzar agrega un texto vía URL o carga el archivo *.txt</div>
 
 <div class="controls top">
   <button id="folder">📁</button>
@@ -119,7 +83,7 @@ Para comenzar agrega un texto vía URL o carga el archivo *.txt
   <button id="fontPlus">➕</button>
   <button id="fontMinus">➖</button>
 
-  <button id="linesBtn" disabled>📄</button>
+  <button disabled>📄</button>
 </div>
 
 <div class="controls bottom">
@@ -136,68 +100,69 @@ Para comenzar agrega un texto vía URL o carga el archivo *.txt
 </div>
 
 <input id="fileInput" type="file" accept=".txt" hidden>
-
 </div>
 
 <script>
-/* ========== STATE ========== */
-let pages=[];
-let currentPage=0;
-let currentLine=0;
+/* ========= STATE ========= */
+const state = {
+  timing: 25,
+  fontSize: 1.25,
+  linesPerPage: 15,
+  playing: false
+};
 
-let pageTimer=null;
-let lineTimer=null;
-let tempoTimer=null;
+let pages=[], currentPage=0, currentLine=0;
+let pageTimer=null, lineTimer=null, tempoTimer=null;
+let sourceName="", wakeLock=null;
 
-let timing=25;
-let fontSize=1.25;
-let linesPerPage=15;
-
-let sourceName="";
-
-/* ========== DOM ========== */
+/* ========= DOM ========= */
 const header=document.getElementById("header");
 const textEl=document.getElementById("text");
 const tempo=document.getElementById("tempo");
-
 const playBtn=document.getElementById("play");
 const pauseBtn=document.getElementById("pause");
 
-/* ========== HELPERS ========== */
+/* ========= HELPERS ========= */
 const truncate=(t,m=32)=>t.length>m?t.slice(0,m-1)+"…":t;
-
 const isSkippable=l=>{
   const t=l.trim();
   return !t||t.startsWith("||")||t.startsWith("//")||t.startsWith("/*");
 };
-
 const isPauseLine=l=>l.trim().startsWith("##");
 
-/* ========== HEADER ========== */
-function updateHeader(){
-  if(!sourceName) return;
-  header.textContent=`${truncate(sourceName)} | ⏱ ${timing}s | 📄 ${linesPerPage}`;
+/* ========= WAKE LOCK ========= */
+async function lockScreen(){
+  try{wakeLock=await navigator.wakeLock.request("screen");}catch{}
+}
+function unlockScreen(){
+  wakeLock?.release();wakeLock=null;
 }
 
-/* ========== PAGINATION ========== */
+/* ========= SYNC ========= */
+function syncUI(){
+  document.documentElement.style
+    .setProperty("--font-size",state.fontSize+"rem");
+
+  if(sourceName){
+    header.textContent =
+      `${truncate(sourceName)} | ⏱ ${state.timing}s | 📄 ${state.linesPerPage}`;
+  }
+
+  if(state.playing){
+    restartPlayback();
+  }
+}
+
+/* ========= PAGINATION ========= */
 function splitPages(txt){
-  const lines=txt.split(/\r?\n/);
-  const out=[];
-  for(let i=0;i<lines.length;i+=linesPerPage){
-    out.push(lines.slice(i,i+linesPerPage));
+  const l=txt.split(/\r?\n/), out=[];
+  for(let i=0;i<l.length;i+=state.linesPerPage){
+    out.push(l.slice(i,i+state.linesPerPage));
   }
   return out;
 }
 
-function repaginate(){
-  if(!pages.length) return;
-  const all=pages.flat().join("\n");
-  pages=splitPages(all);
-  currentPage=Math.min(currentPage,pages.length-1);
-  renderPage();
-}
-
-/* ========== RENDER ========== */
+/* ========= RENDER ========= */
 function renderPage(){
   currentLine=0;
   textEl.innerHTML=pages[currentPage]
@@ -209,11 +174,7 @@ function advanceLine(){
   const lines=document.querySelectorAll(".line");
   while(currentLine<lines.length){
     const t=lines[currentLine].textContent;
-    if(isPauseLine(t)){
-      lines[currentLine].classList.add("highlight");
-      pause();
-      return;
-    }
+    if(isPauseLine(t)){pause();return;}
     if(!isSkippable(t)){
       lines[currentLine].classList.add("highlight");
       return;
@@ -222,134 +183,110 @@ function advanceLine(){
   }
 }
 
-/* ========== TEMPO ========== */
+/* ========= PLAYBACK ========= */
 function startTempo(){
   stopTempo();
   tempoTimer=setInterval(()=>{
     tempo.classList.add("pulse");
     setTimeout(()=>tempo.classList.remove("pulse"),120);
-  },1000/timing);
+  },1000/state.timing);
 }
 function stopTempo(){clearInterval(tempoTimer);}
 
-/* ========== PLAYBACK ========== */
-function restartPlayback(){
-  if(pageTimer){
-    pause();
-    play();
-  }
-}
-
 function play(){
-  if(pageTimer||!pages.length) return;
+  if(state.playing||!pages.length)return;
+  state.playing=true;
   pauseBtn.disabled=false;
+  lockScreen();
   startTempo();
 
   const valid=pages[currentPage].filter(l=>!isSkippable(l)).length||1;
-  const perLine=(timing*1000)/valid;
+  const perLine=(state.timing*1000)/valid;
 
   lineTimer=setInterval(()=>{
     const lines=document.querySelectorAll(".line");
     lines[currentLine]?.classList.remove("highlight");
-    currentLine++;
-    advanceLine();
+    currentLine++;advanceLine();
   },perLine);
 
   pageTimer=setInterval(()=>{
     currentPage++;
     if(currentPage>=pages.length){pause();return;}
     renderPage();
-  },timing*1000);
+  },state.timing*1000);
 }
 
 function pause(){
+  state.playing=false;
   clearInterval(pageTimer);
   clearInterval(lineTimer);
   stopTempo();
-  pageTimer=null;
+  unlockScreen();
   pauseBtn.disabled=true;
 }
 
-/* ========== SETTERS ========== */
-function setTiming(v){
-  timing=Math.max(1,v);
-  updateHeader();
-  restartPlayback();
+/* ========= RESTART ========= */
+function restartPlayback(){
+  pause();
+  play();
 }
 
-function setFont(v){
-  fontSize=Math.min(3,Math.max(.8,v));
-  document.documentElement
-    .style.setProperty("--font-size",fontSize+"rem");
-}
-
-function setLines(v){
-  linesPerPage=Math.max(5,Math.min(30,v));
-  updateHeader();
-  repaginate();
-  restartPlayback();
-}
-
-/* ========== CONTROLS ========== */
+/* ========= CONTROLS ========= */
 playBtn.onclick=play;
 pauseBtn.onclick=pause;
 
-prev.onclick=()=>currentPage>0&&(currentPage--,renderPage());
-next.onclick=()=>currentPage<pages.length-1&&(currentPage++,renderPage());
+timingUp.onclick=()=>{state.timing++;syncUI();}
+timingDown.onclick=()=>{state.timing=Math.max(1,state.timing-1);syncUI();}
+timingBtn.onclick=syncUI;
 
-timingUp.onclick=()=>setTiming(timing+1);
-timingDown.onclick=()=>setTiming(timing-1);
-timingBtn.onclick=restartPlayback;
-
-fontPlus.onclick=()=>setFont(fontSize+.1);
-fontMinus.onclick=()=>setFont(fontSize-.1);
+fontPlus.onclick=()=>{state.fontSize+=0.1;syncUI();}
+fontMinus.onclick=()=>{state.fontSize=Math.max(.8,state.fontSize-.1);syncUI();}
 
 fullscreen.onclick=()=>document.fullscreenElement
  ?document.exitFullscreen()
  :document.documentElement.requestFullscreen?.();
 
-/* ========== INPUTS ========== */
+/* ========= INPUT ========= */
 folder.onclick=()=>fileInput.click();
-
 fileInput.onchange=async()=>{
   const f=fileInput.files[0];
   const txt=await f.text();
   sourceName=f.name;
   pages=splitPages(txt);
   currentPage=0;
-  updateHeader();
+  syncUI();
   renderPage();
 };
 
 linkBtn.onclick=async()=>{
   const url=prompt("Pega URL .txt");
-  if(!url) return;
+  if(!url)return;
   const txt=await (await fetch(url)).text();
   sourceName=url.replace(/^https?:\/\//,"");
   pages=splitPages(txt);
   currentPage=0;
-  updateHeader();
+  syncUI();
   renderPage();
 };
 
-/* ========== URL PARAMS ========== */
+/* ========= URL PARAMS ========= */
 (function(){
   const p=new URLSearchParams(location.search);
-  if(p.has("timing")) timing=+p.get("timing");
-  if(p.has("font")) fontSize=+p.get("font");
-  if(p.has("lines")) linesPerPage=+p.get("lines");
+  if(p.has("timing")) state.timing=+p.get("timing");
+  if(p.has("font")) state.fontSize=+p.get("font");
+  if(p.has("lines")) state.linesPerPage=+p.get("lines");
   if(p.has("text")){
     fetch(p.get("text"))
       .then(r=>r.text())
       .then(txt=>{
         sourceName=p.get("text").replace(/^https?:\/\//,"");
         pages=splitPages(txt);
-        updateHeader();
+        syncUI();
         renderPage();
       });
+  } else {
+    syncUI();
   }
-  setFont(fontSize);
-  updateHeader();
 })();
 </script>
 </body>
