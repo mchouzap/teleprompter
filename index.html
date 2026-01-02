@@ -202,16 +202,16 @@ function nextLine(){
 function play(){
   if(state.running) return;
   state.running=true;
-  playBtn.disabled=true;
-  pauseBtn.disabled=false;
+  play.disabled=true;
+  pause.disabled=false;
   requestWakeLock();
   state.timer=setInterval(nextLine,state.timing*1000);
 }
 function pause(){
   state.running=false;
   clearInterval(state.timer);
-  playBtn.disabled=false;
-  pauseBtn.disabled=true;
+  play.disabled = false;
+  pause.disabled = true;
   releaseWakeLock();
 }
 
