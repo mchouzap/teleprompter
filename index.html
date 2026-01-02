@@ -28,9 +28,9 @@ body{
 .controls.top{
   grid-template-columns:
     1fr 1fr
-    .5fr .5fr .5fr
-    .5fr .5fr .5fr
-    .5fr;
+    0.5fr .4fr .4fr
+    0.5fr .4fr .4fr
+    0.5fr;
 }
 
 .controls.bottom{grid-template-columns:repeat(5,1fr)}
@@ -69,7 +69,9 @@ button:disabled{background:#333;color:#777}
 <body>
 <div id="app">
 
-<div id="header">Para comenzar agrega un texto vía URL o carga el archivo *.txt</div>
+<div id="header">
+Para comenzar agrega un texto vía URL o carga el archivo *.txt
+</div>
 
 <div class="controls top">
   <button id="folder">📁</button>
@@ -103,191 +105,196 @@ button:disabled{background:#333;color:#777}
 </div>
 
 <script>
-/* ========= STATE ========= */
-const state = {
-  timing: 25,
-  fontSize: 1.25,
-  linesPerPage: 15,
-  playing: false
-};
+document.addEventListener("DOMContentLoaded", () => {
 
-let pages=[], currentPage=0, currentLine=0;
-let pageTimer=null, lineTimer=null, tempoTimer=null;
-let sourceName="", wakeLock=null;
+  /* ========= STATE ========= */
+  const state = {
+    timing: 25,
+    fontSize: 1.25,
+    linesPerPage: 15,
+    playing: false
+  };
 
-/* ========= DOM ========= */
-const header=document.getElementById("header");
-const textEl=document.getElementById("text");
-const tempo=document.getElementById("tempo");
-const playBtn=document.getElementById("play");
-const pauseBtn=document.getElementById("pause");
+  let pages=[], currentPage=0, currentLine=0;
+  let pageTimer=null, lineTimer=null, tempoTimer=null;
+  let sourceName="", wakeLock=null;
 
-/* ========= HELPERS ========= */
-const truncate=(t,m=32)=>t.length>m?t.slice(0,m-1)+"…":t;
-const isSkippable=l=>{
-  const t=l.trim();
-  return !t||t.startsWith("||")||t.startsWith("//")||t.startsWith("/*");
-};
-const isPauseLine=l=>l.trim().startsWith("##");
+  /* ========= DOM ========= */
+  const $ = id => document.getElementById(id);
 
-/* ========= WAKE LOCK ========= */
-async function lockScreen(){
-  try{wakeLock=await navigator.wakeLock.request("screen");}catch{}
-}
-function unlockScreen(){
-  wakeLock?.release();wakeLock=null;
-}
+  const header = $("header");
+  const textEl = $("text");
+  const tempo = $("tempo");
 
-/* ========= SYNC ========= */
-function syncUI(){
-  document.documentElement.style
-    .setProperty("--font-size",state.fontSize+"rem");
+  const playBtn = $("play");
+  const pauseBtn = $("pause");
 
-  if(sourceName){
-    header.textContent =
-      `${truncate(sourceName)} | ⏱ ${state.timing}s | 📄 ${state.linesPerPage}`;
+  /* ========= HELPERS ========= */
+  const truncate=(t,m=32)=>t.length>m?t.slice(0,m-1)+"…":t;
+  const isSkippable=l=>{
+    const t=l.trim();
+    return !t||t.startsWith("||")||t.startsWith("//")||t.startsWith("/*");
+  };
+  const isPauseLine=l=>l.trim().startsWith("##");
+
+  /* ========= WAKE LOCK ========= */
+  async function lockScreen(){
+    try{ wakeLock=await navigator.wakeLock.request("screen"); }catch{}
+  }
+  function unlockScreen(){
+    wakeLock?.release(); wakeLock=null;
   }
 
-  if(state.playing){
-    restartPlayback();
-  }
-}
+  /* ========= UI SYNC ========= */
+  function syncUI(){
+    document.documentElement.style
+      .setProperty("--font-size", state.fontSize+"rem");
 
-/* ========= PAGINATION ========= */
-function splitPages(txt){
-  const l=txt.split(/\r?\n/), out=[];
-  for(let i=0;i<l.length;i+=state.linesPerPage){
-    out.push(l.slice(i,i+state.linesPerPage));
-  }
-  return out;
-}
-
-/* ========= RENDER ========= */
-function renderPage(){
-  currentLine=0;
-  textEl.innerHTML=pages[currentPage]
-    .map(l=>`<div class="line">${l}</div>`).join("");
-  advanceLine();
-}
-
-function advanceLine(){
-  const lines=document.querySelectorAll(".line");
-  while(currentLine<lines.length){
-    const t=lines[currentLine].textContent;
-    if(isPauseLine(t)){pause();return;}
-    if(!isSkippable(t)){
-      lines[currentLine].classList.add("highlight");
-      return;
+    if(sourceName){
+      header.textContent =
+        `${truncate(sourceName)} | ⏱ ${state.timing}s | 📄 ${state.linesPerPage}`;
     }
-    currentLine++;
   }
-}
 
-/* ========= PLAYBACK ========= */
-function startTempo(){
-  stopTempo();
-  tempoTimer=setInterval(()=>{
-    tempo.classList.add("pulse");
-    setTimeout(()=>tempo.classList.remove("pulse"),120);
-  },1000/state.timing);
-}
-function stopTempo(){clearInterval(tempoTimer);}
+  /* ========= PAGINATION ========= */
+  function splitPages(txt){
+    const l=txt.split(/\r?\n/), out=[];
+    for(let i=0;i<l.length;i+=state.linesPerPage){
+      out.push(l.slice(i,i+state.linesPerPage));
+    }
+    return out;
+  }
 
-function play(){
-  if(state.playing||!pages.length)return;
-  state.playing=true;
-  pauseBtn.disabled=false;
-  lockScreen();
-  startTempo();
+  /* ========= RENDER ========= */
+  function renderPage(){
+    currentLine=0;
+    textEl.innerHTML = pages[currentPage]
+      .map(l=>`<div class="line">${l}</div>`).join("");
+    advanceLine();
+  }
 
-  const valid=pages[currentPage].filter(l=>!isSkippable(l)).length||1;
-  const perLine=(state.timing*1000)/valid;
-
-  lineTimer=setInterval(()=>{
+  function advanceLine(){
     const lines=document.querySelectorAll(".line");
-    lines[currentLine]?.classList.remove("highlight");
-    currentLine++;advanceLine();
-  },perLine);
+    while(currentLine<lines.length){
+      const t=lines[currentLine].textContent;
+      if(isPauseLine(t)){ pause(); return; }
+      if(!isSkippable(t)){
+        lines[currentLine].classList.add("highlight");
+        return;
+      }
+      currentLine++;
+    }
+  }
 
-  pageTimer=setInterval(()=>{
-    currentPage++;
-    if(currentPage>=pages.length){pause();return;}
-    renderPage();
-  },state.timing*1000);
-}
+  /* ========= TEMPO ========= */
+  function startTempo(){
+    stopTempo();
+    tempoTimer=setInterval(()=>{
+      tempo.classList.add("pulse");
+      setTimeout(()=>tempo.classList.remove("pulse"),120);
+    },1000/state.timing);
+  }
+  function stopTempo(){ clearInterval(tempoTimer); }
 
-function pause(){
-  state.playing=false;
-  clearInterval(pageTimer);
-  clearInterval(lineTimer);
-  stopTempo();
-  unlockScreen();
-  pauseBtn.disabled=true;
-}
+  /* ========= PLAYBACK ========= */
+  function play(){
+    if(state.playing||!pages.length) return;
+    state.playing=true;
+    pauseBtn.disabled=false;
+    lockScreen();
+    startTempo();
 
-/* ========= RESTART ========= */
-function restartPlayback(){
-  pause();
-  play();
-}
+    const valid=pages[currentPage].filter(l=>!isSkippable(l)).length||1;
+    const perLine=(state.timing*1000)/valid;
 
-/* ========= CONTROLS ========= */
-playBtn.onclick=play;
-pauseBtn.onclick=pause;
+    lineTimer=setInterval(()=>{
+      const lines=document.querySelectorAll(".line");
+      lines[currentLine]?.classList.remove("highlight");
+      currentLine++; advanceLine();
+    },perLine);
 
-timingUp.onclick=()=>{state.timing++;syncUI();}
-timingDown.onclick=()=>{state.timing=Math.max(1,state.timing-1);syncUI();}
-timingBtn.onclick=syncUI;
+    pageTimer=setInterval(()=>{
+      currentPage++;
+      if(currentPage>=pages.length){ pause(); return; }
+      renderPage();
+    },state.timing*1000);
+  }
 
-fontPlus.onclick=()=>{state.fontSize+=0.1;syncUI();}
-fontMinus.onclick=()=>{state.fontSize=Math.max(.8,state.fontSize-.1);syncUI();}
+  function pause(){
+    state.playing=false;
+    clearInterval(pageTimer);
+    clearInterval(lineTimer);
+    stopTempo();
+    unlockScreen();
+    pauseBtn.disabled=true;
+  }
 
-fullscreen.onclick=()=>document.fullscreenElement
- ?document.exitFullscreen()
- :document.documentElement.requestFullscreen?.();
+  function restart(){
+    if(state.playing){ pause(); play(); }
+  }
 
-/* ========= INPUT ========= */
-folder.onclick=()=>fileInput.click();
-fileInput.onchange=async()=>{
-  const f=fileInput.files[0];
-  const txt=await f.text();
-  sourceName=f.name;
-  pages=splitPages(txt);
-  currentPage=0;
-  syncUI();
-  renderPage();
-};
+  /* ========= CONTROLS ========= */
+  playBtn.addEventListener("click", play);
+  pauseBtn.addEventListener("click", pause);
 
-linkBtn.onclick=async()=>{
-  const url=prompt("Pega URL .txt");
-  if(!url)return;
-  const txt=await (await fetch(url)).text();
-  sourceName=url.replace(/^https?:\/\//,"");
-  pages=splitPages(txt);
-  currentPage=0;
-  syncUI();
-  renderPage();
-};
+  $("timingUp").addEventListener("click", ()=>{
+    state.timing++; syncUI(); restart();
+  });
+  $("timingDown").addEventListener("click", ()=>{
+    state.timing=Math.max(1,state.timing-1); syncUI(); restart();
+  });
 
-/* ========= URL PARAMS ========= */
-(function(){
+  $("fontPlus").addEventListener("click", ()=>{
+    state.fontSize+=0.1; syncUI();
+  });
+  $("fontMinus").addEventListener("click", ()=>{
+    state.fontSize=Math.max(.8,state.fontSize-.1); syncUI();
+  });
+
+  $("fullscreen").addEventListener("click", ()=>{
+    document.fullscreenElement
+      ? document.exitFullscreen()
+      : document.documentElement.requestFullscreen();
+  });
+
+  $("folder").addEventListener("click", ()=>$("fileInput").click());
+
+  $("fileInput").addEventListener("change", async e=>{
+    const txt = await e.target.files[0].text();
+    sourceName = e.target.files[0].name;
+    pages = splitPages(txt);
+    currentPage=0;
+    syncUI(); renderPage();
+  });
+
+  $("linkBtn").addEventListener("click", async ()=>{
+    const url = prompt("Pega URL .txt");
+    if(!url) return;
+    const txt = await (await fetch(url)).text();
+    sourceName = url.replace(/^https?:\/\//,"");
+    pages = splitPages(txt);
+    currentPage=0;
+    syncUI(); renderPage();
+  });
+
+  /* ========= URL PARAMS ========= */
   const p=new URLSearchParams(location.search);
   if(p.has("timing")) state.timing=+p.get("timing");
   if(p.has("font")) state.fontSize=+p.get("font");
   if(p.has("lines")) state.linesPerPage=+p.get("lines");
+
   if(p.has("text")){
     fetch(p.get("text"))
       .then(r=>r.text())
       .then(txt=>{
         sourceName=p.get("text").replace(/^https?:\/\//,"");
         pages=splitPages(txt);
-        syncUI();
-        renderPage();
+        syncUI(); renderPage();
       });
   } else {
     syncUI();
   }
-})();
+});
 </script>
 </body>
 </html>
