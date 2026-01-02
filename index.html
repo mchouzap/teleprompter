@@ -120,6 +120,37 @@ input{
 <input id="fileInput" type="file" accept=".txt" hidden>
 
 <script>
+
+/* ===== BUTTONS CONSTANTS ===== */
+
+
+  const play = document.getElementById("play");
+const pause = document.getElementById("pause");
+const back = document.getElementById("back");
+const forward = document.getElementById("forward");
+const fullscreen = document.getElementById("fullscreen");
+
+const timingSet = document.getElementById("timingSet");
+const timingUp = document.getElementById("timingUp");
+const timingDown = document.getElementById("timingDown");
+
+const fontSet = document.getElementById("fontSet");
+const fontUp = document.getElementById("fontUp");
+const fontDown = document.getElementById("fontDown");
+
+const linesSet = document.getElementById("linesSet");
+
+const loadFile = document.getElementById("loadFile");
+const loadUrl = document.getElementById("loadUrl");
+const showUrl = document.getElementById("showUrl");
+
+const fileInput = document.getElementById("fileInput");
+const textUrl = document.getElementById("textUrl");
+const urlRow = document.getElementById("urlRow");
+
+const viewer = document.getElementById("viewer");
+const header = document.getElementById("header");
+
 /* ===== STATE ===== */
 const state={
   timing:25,fontSize:1.6,linesToShow:15,
