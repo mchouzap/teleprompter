@@ -6,7 +6,10 @@
 <title>Chou's Teleprompter</title>
 
 <style>
-:root{ --font-size:1.6rem; --blue:#1e88e5 }
+:root{
+  --font-size:1.6rem;
+  --blue:#1e88e5;
+}
 
 body{
   margin:0;
@@ -19,16 +22,24 @@ body{
   overflow:hidden;
 }
 
-header{
-  padding:6px 10px;
+/* ================= HEADER ================= */
+.top-row{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  padding:6px;
   background:#0d47a1;
+}
+
+header{
+  flex:1;
   font-size:.85rem;
   white-space:nowrap;
   overflow:hidden;
   text-overflow:ellipsis;
-  flex:1;
 }
 
+/* ================= CONTROLS ================= */
 .controls{
   background:#111;
   padding:6px;
@@ -40,13 +51,12 @@ header{
 .row{
   display:flex;
   gap:6px;
-  width:100%;
 }
 
 button,input{
   height:36px;
-  border:none;
   font-size:.95rem;
+  border:none;
 }
 
 button{
@@ -55,14 +65,20 @@ button{
   flex:1;
 }
 
-button:disabled{ opacity:.4 }
-
-input{
-  background:#fff;
-  color:#000;
-  flex:3;
+button:disabled{
+  opacity:.4;
 }
 
+input{
+  flex:1;
+  padding:0 8px;
+}
+
+.hidden{
+  display:none !important;
+}
+
+/* ================= VIEWER ================= */
 #viewer{
   flex:1;
   padding:12px;
@@ -71,29 +87,42 @@ input{
   overflow:hidden;
 }
 
-.line{ opacity:.45 }
-.active{ opacity:1;background:#fff;color:#000 }
+.line{
+  opacity:.45;
+}
+.active{
+  opacity:1;
+  background:#fff;
+  color:#000;
+}
 
-.hidden{ display:none }
+/* ================= FULLSCREEN MODE ================= */
+.fullscreen .top-row,
+.fullscreen .settings-row{
+  display:none;
+}
 </style>
 </head>
 
 <body>
 
-<!-- FILA 1 -->
-<div class="row">
+<!-- HEADER -->
+<div class="top-row" id="headerRow">
   <header id="header">Chou's Teleprompter</header>
-  <button id="loadFile">📂</button>
-  <button id="showUrl">🔗</button>
+  <button id="btnFile">📂</button>
+  <button id="btnLink">🔗</button>
 </div>
 
-<div class="row hidden" id="urlRow">
-  <input id="textUrl" placeholder="Pega URL .txt y presiona Enter">
+<!-- URL INPUT -->
+<div class="row hidden" id="urlRow" style="padding:6px;background:#111">
+  <input id="urlInput" placeholder="Pega URL .txt y presiona Enter">
 </div>
 
-<!-- FILA 2 -->
+<!-- CONTROLS -->
 <div class="controls">
-  <div class="row">
+
+  <!-- SETTINGS -->
+  <div class="row settings-row" id="settingsRow">
     <button id="timingSet">⏱</button>
     <button id="timingUp">⬆</button>
     <button id="timingDown">⬇</button>
@@ -105,30 +134,31 @@ input{
     <button id="linesSet">≡</button>
   </div>
 
-  <!-- FILA 3 -->
-  <div class="row">
-    <button id="play">▶</button>
-    <button id="pause" disabled>⏸</button>
-    <button id="back">⏮</button>
-    <button id="forward">⏭</button>
-    <button id="fullscreen">⛶</button>
+  <!-- NAVIGATION (SIEMPRE VISIBLE) -->
+  <div class="row nav-row" id="navRow">
+    <button id="playBtn">▶</button>
+    <button id="pauseBtn" disabled>⏸</button>
+    <button id="backBtn">⏮</button>
+    <button id="forwardBtn">⏭</button>
+    <button id="fsBtn">⛶</button>
   </div>
+
 </div>
 
 <div id="viewer"></div>
 
-<input id="fileInput" type="file" accept=".txt" hidden>
+<input type="file" id="fileInput" accept=".txt" hidden>
 
 <script>
+/* ================= DOM ================= */
+const header = document.getElementById("header");
+const viewer = document.getElementById("viewer");
 
-/* ===== BUTTONS CONSTANTS ===== */
-
-
-  const play = document.getElementById("play");
-const pause = document.getElementById("pause");
-const back = document.getElementById("back");
-const forward = document.getElementById("forward");
-const fullscreen = document.getElementById("fullscreen");
+const btnFile = document.getElementById("btnFile");
+const btnLink = document.getElementById("btnLink");
+const urlRow = document.getElementById("urlRow");
+const urlInput = document.getElementById("urlInput");
+const fileInput = document.getElementById("fileInput");
 
 const timingSet = document.getElementById("timingSet");
 const timingUp = document.getElementById("timingUp");
@@ -140,91 +170,73 @@ const fontDown = document.getElementById("fontDown");
 
 const linesSet = document.getElementById("linesSet");
 
-const loadFile = document.getElementById("loadFile");
-const loadUrl = document.getElementById("loadUrl");
-const showUrl = document.getElementById("showUrl");
+const playBtn = document.getElementById("playBtn");
+const pauseBtn = document.getElementById("pauseBtn");
+const backBtn = document.getElementById("backBtn");
+const forwardBtn = document.getElementById("forwardBtn");
+const fsBtn = document.getElementById("fsBtn");
 
-const fileInput = document.getElementById("fileInput");
-const textUrl = document.getElementById("textUrl");
-const urlRow = document.getElementById("urlRow");
-
-const viewer = document.getElementById("viewer");
-const header = document.getElementById("header");
-
-/* ===== STATE ===== */
-const state={
-  timing:25,fontSize:1.6,linesToShow:15,
-  lines:[],index:0,running:false,timer:null,
-  wakeLock:null,title:"Chou's Teleprompter"
+/* ================= STATE ================= */
+const state = {
+  timing:25,
+  fontSize:1.6,
+  linesToShow:15,
+  lines:[],
+  index:0,
+  running:false,
+  timer:null,
+  wakeLock:null,
+  title:"Chou's Teleprompter"
 };
 
-/* ===== INIT URL PARAMS ===== */
-(()=>{
-  const p=new URLSearchParams(location.search);
-  if(p.get("timing")) state.timing=parseInt(p.get("timing"));
-  if(p.get("font")) state.fontSize=parseFloat(p.get("font"));
-  if(p.get("lines")) state.linesToShow=parseInt(p.get("lines"));
+/* ================= URL PARAMS ================= */
+(() => {
+  const p = new URLSearchParams(location.search);
+  if(p.get("timing")) state.timing = +p.get("timing");
+  if(p.get("font")) state.fontSize = +p.get("font");
+  if(p.get("lines")) state.linesToShow = +p.get("lines");
   if(p.get("text")) loadFromURL(p.get("text"));
   applyVisuals();
 })();
 
-/* ===== LOAD TEXT ===== */
+/* ================= TEXT LOAD ================= */
 function loadFromURL(url){
   fetch(url).then(r=>r.text()).then(t=>{
     setText(t,url);
-    hideUrlInput();
+    urlRow.classList.add("hidden");
   });
 }
 
 function setText(text,label){
-  state.lines=text.split(/\r?\n/);
-  state.index=0;
-  state.title=label;
+  state.lines = text.split(/\r?\n/);
+  state.index = 0;
+  state.title = label;
   updateHeader();
   render();
 }
 
-/* ===== URL INPUT ===== */
-showUrl.onclick=()=>{
-  urlRow.classList.toggle("hidden");
-  textUrl.focus();
-};
-textUrl.onkeydown=e=>{
-  if(e.key==="Enter" && textUrl.value){
-    loadFromURL(textUrl.value.trim());
-  }
-};
-function hideUrlInput(){
-  urlRow.classList.add("hidden");
-  textUrl.value="";
-}
-
-/* ===== FILE ===== */
-loadFile.onclick=()=>fileInput.click();
-fileInput.onchange=e=>{
-  const f=e.target.files[0];
-  if(f) f.text().then(t=>setText(t,f.name));
-};
-
-/* ===== RENDER ===== */
+/* ================= RENDER ================= */
 function render(){
-  viewer.innerHTML=state.lines
+  viewer.innerHTML = state.lines
     .slice(state.index,state.index+state.linesToShow)
     .map((l,i)=>`<div class="line ${i===0?'active':''}">${l}</div>`)
     .join("");
 }
 
-/* ===== PLAYBACK ===== */
+/* ================= PLAY ================= */
 function nextLine(){
-  let next=state.index+1, pauseAfter=false;
+  let next = state.index+1;
+  let pauseAfter=false;
+
   while(next<state.lines.length){
     const l=state.lines[next].trim();
-    if(l===""||l.startsWith("||")||l.startsWith("//")||l.startsWith("/*")){
+    if(!l||l.startsWith("||")||l.startsWith("//")||l.startsWith("/*")){
       next++;continue;
     }
     if(l.startsWith("##")) pauseAfter=true;
     break;
   }
+
   state.index=next;
   render();
   if(pauseAfter) setTimeout(pause,50);
@@ -233,69 +245,87 @@ function nextLine(){
 function play(){
   if(state.running) return;
   state.running=true;
-  play.disabled=true;
-  pause.disabled=false;
+  playBtn.disabled=true;
+  pauseBtn.disabled=false;
   requestWakeLock();
   state.timer=setInterval(nextLine,state.timing*1000);
 }
+
 function pause(){
   state.running=false;
   clearInterval(state.timer);
-  play.disabled = false;
-  pause.disabled = true;
+  playBtn.disabled=false;
+  pauseBtn.disabled=true;
   releaseWakeLock();
 }
 
-/* ===== BUTTONS ===== */
-play.onclick=play;
-pause.onclick=pause;
-back.onclick=()=>{state.index=Math.max(0,state.index-1);render()};
-forward.onclick=()=>{state.index++;render()};
+/* ================= EVENTS ================= */
+playBtn.onclick=play;
+pauseBtn.onclick=pause;
+backBtn.onclick=()=>{state.index=Math.max(0,state.index-1);render();};
+forwardBtn.onclick=()=>{state.index++;render();};
 
+timingSet.onclick=()=>{const v=prompt("Timing (s)",state.timing);if(v)setTiming(+v);};
 timingUp.onclick=()=>setTiming(state.timing+1);
 timingDown.onclick=()=>setTiming(state.timing-1);
-timingSet.onclick=()=>{const v=prompt("Timing",state.timing);if(v)setTiming(+v);};
 
+fontSet.onclick=()=>{const v=prompt("Font size",state.fontSize);if(v)setFont(+v);};
 fontUp.onclick=()=>setFont(state.fontSize+.1);
 fontDown.onclick=()=>setFont(state.fontSize-.1);
-fontSet.onclick=()=>{const v=prompt("Fuente",state.fontSize);if(v)setFont(+v);};
 
-linesSet.onclick=()=>{const v=prompt("Líneas",state.linesToShow);if(v)setLines(+v);};
+linesSet.onclick=()=>{const v=prompt("Lines",state.linesToShow);if(v)setLines(+v);};
 
-fullscreen.onclick=()=>{
-  document.fullscreenElement?
-    document.exitFullscreen():
+btnLink.onclick=()=>{urlRow.classList.toggle("hidden");urlInput.focus();};
+urlInput.onkeydown=e=>{if(e.key==="Enter")loadFromURL(urlInput.value);};
+
+btnFile.onclick=()=>fileInput.click();
+fileInput.onchange=e=>e.target.files[0].text().then(t=>setText(t,e.target.files[0].name));
+
+/* ================= FULLSCREEN ================= */
+fsBtn.onclick=()=>{
+  if(!document.fullscreenElement){
     document.documentElement.requestFullscreen();
+    document.body.classList.add("fullscreen");
+  }else{
+    document.exitFullscreen();
+    document.body.classList.remove("fullscreen");
+  }
 };
 
-/* ===== SETTERS ===== */
+/* ================= SETTERS ================= */
 function setTiming(v){
-  if(v<1) return;
-  state.timing=v;updateHeader();
+  if(v<1)return;
+  state.timing=v;
+  updateHeader();
   if(state.running){
     clearInterval(state.timer);
     state.timer=setInterval(nextLine,state.timing*1000);
   }
 }
+
 function setFont(v){
-  if(v<.5) return;
-  state.fontSize=v;applyVisuals();
-}
-function setLines(v){
-  if(v<1) return;
-  state.linesToShow=v;render();
+  if(v<0.5)return;
+  state.fontSize=v;
+  applyVisuals();
 }
 
-/* ===== VISUAL ===== */
+function setLines(v){
+  if(v<1)return;
+  state.linesToShow=v;
+  render();
+}
+
+/* ================= VISUAL ================= */
 function applyVisuals(){
   document.documentElement.style.setProperty("--font-size",state.fontSize+"rem");
   updateHeader();
 }
+
 function updateHeader(){
   header.textContent=`${state.title.substring(0,32)} | ${state.timing}s`;
 }
 
-/* ===== WAKE LOCK ===== */
+/* ================= WAKE LOCK ================= */
 async function requestWakeLock(){
   try{state.wakeLock=await navigator.wakeLock.request("screen");}catch{}
 }
