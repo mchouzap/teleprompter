@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html>
+<body style="background:black;color:white">
+<button id="b">CLICK</button>
+
+<script>
+document.addEventListener("DOMContentLoaded",()=>{
+  document.getElementById("b").onclick=()=>{
+    alert("FUNCIONA");
+  }
+});
+</script>
+</body>
+</html>
