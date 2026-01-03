@@ -87,7 +87,7 @@ input{
 }
 
 .line:hover{
-  opacity:.7;
+  opacity:.65;
 }
 
 .active{
@@ -228,15 +228,7 @@ function render(){
     div.textContent = state.lines[i] || "";
 
     div.onclick = () => {
-      const clickedPos = i - start;
       state.index = i;
-      render();
-
-      const desired = state.index + (3 - clickedPos);
-      state.index = Math.max(
-        0,
-        Math.min(state.lines.length - 1, desired)
-      );
       render();
     };
 
